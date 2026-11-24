@@ -324,6 +324,23 @@
         "KV Cache",
         "GQA"
       ]
+    },
+    {
+      "id": "ch21",
+      "number": 21,
+      "title": "사전학습·전이학습·파인튜닝",
+      "subtitle": "사전학습과 전이학습 → Base와 Instruct → 프롬프트, RAG, 파인튜닝 → 실험용 고정 데이터셋",
+      "slug": "ch21_transfer_learning",
+      "version": "v01",
+      "source": "content/ch21.md",
+      "tags": [
+        "사전학습",
+        "전이학습",
+        "파인튜닝",
+        "Base Model",
+        "Instruct Model",
+        "RAG"
+      ]
     }
   ]
 }
