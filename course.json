@@ -164,6 +164,22 @@
         "Weight Tying",
         "Qwen"
       ]
+    },
+    {
+      "id": "ch11",
+      "number": 11,
+      "title": "Transformer 전체 구조",
+      "subtitle": "RNN과 Attention → Decoder-only → Transformer Block → Qwen2 데이터 흐름과 실제 계층 대조",
+      "slug": "ch11_transformer_architecture",
+      "version": "v01",
+      "source": "content/ch11.md",
+      "tags": [
+        "Transformer",
+        "Decoder-only",
+        "Block",
+        "Residual",
+        "Qwen"
+      ]
     }
   ]
 }
