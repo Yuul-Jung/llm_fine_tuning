@@ -473,6 +473,22 @@
         "병합",
         "Qwen2-Tiny"
       ]
+    },
+    {
+      "id": "ch30",
+      "number": 30,
+      "title": "PEFT 라이브러리 LoRA",
+      "subtitle": "LoraConfig와 get_peft_model → Target Modules → Qwen2-Tiny PEFT 학습 → Adapter 저장과 재로딩",
+      "slug": "ch30_peft_lora",
+      "version": "v01",
+      "source": "content/ch30.md",
+      "tags": [
+        "PEFT",
+        "LoraConfig",
+        "Target Modules",
+        "Adapter",
+        "merge_and_unload"
+      ]
     }
   ]
 }

@@ -11,3 +11,4 @@ matplotlib
 huggingface_hub
 safetensors
 transformers
+peft                      # 제30장부터(교재 검증: 0.22.0)
