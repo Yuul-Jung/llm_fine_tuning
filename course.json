@@ -638,6 +638,23 @@
         "Adapter",
         "CPU 경로"
       ]
+    },
+    {
+      "id": "ch40",
+      "number": 40,
+      "title": "Full FT·LoRA·QLoRA 비교",
+      "subtitle": "비교 설계 → 비교 A: Qwen2-Tiny → 비교 B: Qwen2.5-0.5B → 하드웨어별 최적 선택",
+      "slug": "ch40_method_compare",
+      "version": "v01",
+      "source": "content/ch40.md",
+      "tags": [
+        "Full FT",
+        "LoRA",
+        "QLoRA",
+        "메모리",
+        "비교 실험",
+        "하드웨어 선택"
+      ]
     }
   ]
 }
