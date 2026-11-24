@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="학습 루프 → Scheduler, Accumulation, Clipping → 소규모 사전학습 → HF 형식 저장 → Full Fine-tuning → 0.5B 메모리 판정"><title>제25장 · Qwen2-Tiny 사전학습과 Full Fine-tuning · LLM 파인튜닝 및 로컬 AI 구현</title>
+<meta name="description" content="BitsAndBytesConfig → 하드웨어 조건 → Compute Dtype과 torch_dtype → 버전 조합 확정"><title>제37장 · bitsandbytes와 GPU 호환성 · LLM 파인튜닝 및 로컬 AI 구현</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>/*
@@ -576,11 +576,11 @@ pre code {
     height: auto;
   }
 }
-</style></head><body data-chapter="ch25">
+</style></head><body data-chapter="ch37">
 <button type="button" class="mobile-menu" id="mobile-menu" aria-controls="course-nav" aria-expanded="false">☰ 장·목차</button><div class="shade" id="shade"></div>
-<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 25</p><h1>제25장 · Qwen2-Tiny 사전학습과 Full Fine-tuning</h1><p>학습 루프 → Scheduler, Accumulation, Clipping → 소규모 사전학습 → HF 형식 저장 → Full Fine-tuning → 0.5B 메모리 판정</p><div class="chips"><span class="chip">사전학습</span><span class="chip">Full Fine-tuning</span><span class="chip">학습 루프</span><span class="chip">과적합</span><span class="chip">파국적 망각</span><span class="chip">Checkpoint</span></div></div></header>
-<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제22~24장에서 학습의 재료를 모두 갖췄습니다. 손실을 재고(제22장), Gradient를 구하고(제23장), Optimizer로 가중치를 고칩니다(제24장). 이 장에서는 이 재료로 제19장의 <strong>무작위 Qwen2-Tiny를 처음부터 학습</strong>합니다. 아무것도 모르던 모델이 고정 데이터의 문장을 배워 가는 과정을 손실 곡선으로 지켜보고, 사전학습한 모델을 저장했다가 다시 불러 새로운 분야(자전거 정비)로 <strong>Full Fine-tuning</strong>합니다.</p>
-<p>이 장은 LLM이 만들어지는 두 단계(제21장)를 아주 작은 크기로 직접 재현하는 장입니다. 그리고 이 과정에서 학습의 대표적인 두 가지 함정, <strong>과적합</strong>과 <strong>망각</strong>을 숫자로 만납니다.</p>
+<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 37</p><h1>제37장 · bitsandbytes와 GPU 호환성</h1><p>BitsAndBytesConfig → 하드웨어 조건 → Compute Dtype과 torch_dtype → 버전 조합 확정</p><div class="chips"><span class="chip">bitsandbytes</span><span class="chip">BitsAndBytesConfig</span><span class="chip">Compute Capability</span><span class="chip">4비트 로딩</span><span class="chip">버전 고정</span></div></div></header>
+<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제36장에서 NF4를 직접 구현해 bitsandbytes와 같은 결과를 냈습니다. 이제 실제 모델을 bitsandbytes로 <strong>4비트로 불러올</strong> 차례입니다. Hugging Face Transformers는 설정 객체 하나(<code>BitsAndBytesConfig</code>)만 넘기면, 모델을 불러오면서 모든 Linear를 4비트로 바꿔 줍니다.</p>
+<p>다만 양자화는 하드웨어와 라이브러리 버전에 민감한 영역입니다. 어떤 기능은 GPU 세대에 따라 쓸 수 없고, 계산 자료형을 잘못 고르면 GT 1030에서 크게 느려집니다. 이 장은 설정 항목을 제36장의 개념과 하나씩 연결하고, 하드웨어 조건과 자료형 선택을 정리한 뒤, Qwen2.5-0.5B를 4비트로 불러와 계층별 자료형·메모리·PPL을 잽니다. 그리고 지금까지 검증한 라이브러리 버전을 고정합니다.</p>
 <table>
 <thead>
 <tr>
@@ -591,326 +591,239 @@ pre code {
 <tbody>
 <tr>
   <td>핵심 질문</td>
-  <td>무작위 모델은 어떻게 언어를 배우며, 배운 모델을 새 분야에 맞추면 무엇을 얻고 잃는가</td>
+  <td>4비트 로딩 설정은 무엇을 정하며, GT 1030에서 무엇이 가능하고 무엇이 불가능한가</td>
 </tr>
 <tr>
   <td>실습 결과물</td>
-  <td>사전학습·Full FT 손실 기록과 곡선, 저장·재로딩 일치 확인, 학습 전후 PPL 비교, 메모리 측정</td>
+  <td>하드웨어 조건 판정, 설정 대응표, 4비트 모델의 계층·자료형, 메모리 분해, 실제 4비트 모델의 PPL</td>
 </tr>
 <tr>
   <td>실습 파일</td>
-  <td><code>examples/ch25/</code>의 <code>trainer.py</code>, <code>pretrain_tiny.py</code>, <code>test_ch25.py</code>, 도메인 데이터 <code>datasets/fixed/domain_*.txt</code></td>
+  <td><code>examples/ch37/</code>의 <code>load_4bit.py</code>, <code>test_ch37.py</code>, <code>requirements/cpu.txt</code>, <code>requirements/gt1030.txt</code></td>
 </tr>
 <tr>
   <td>선수 장</td>
-  <td>제19장(Qwen2-Tiny), 제21장(고정 데이터), 제22~24장(손실·Gradient·Optimizer)</td>
+  <td>제02장(GT 1030 특성), 제32장(저장·연산 자료형), 제36장(NF4, 이중 양자화)</td>
 </tr>
 </tbody>
 </table>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>무작위 Qwen2-Tiny ──사전학습(고정 데이터)──▶ 저장 ──재로딩──▶ Full FT(자전거 정비) ──▶ 저장
-   손실 ≈ 12.0              손실 ≈ 5.6     같은 출력          도메인 PPL ↓, 일반 PPL ↑
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>from_pretrained(…, quantization_config=BitsAndBytesConfig(…), dtype=torch.float32)
+   ├── Linear 168개 → Linear4bit: NF4 번호(uint8) + absmax(이중 양자화)   계산 시 FP32로 복원
+   └── 나머지(Embedding, RMSNorm, 편향) → dtype(FP32) 그대로
 </code></pre></div>
-</section><section class="section" id="s01"><h2><span class="num">01</span>학습 루프 구성</h2><p>학습은 같은 동작의 반복입니다. 이 장에서 그 반복을 <code>train()</code> 함수 하나로 만들어, 제26장 이후의 부분 학습과 LoRA 학습에서도 그대로 씁니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>한 단계:
-  ① 묶음 꺼내기       무작위로 블록 2개(Batch 2)
-  ② 순전파·손실       model(input_ids=x, labels=x).loss   (제22장의 한 칸 이동 포함)
-  ③ 역전파            loss.backward()                     (제23장)
-     (①~③을 accum번 반복해 Gradient를 더함)
-  ④ Clipping          Gradient 전체 노름을 1.0 이하로
-  ⑤ 갱신              optimizer.step(), scheduler.step()  (제24장)
-  ⑥ 초기화            optimizer.zero_grad()
+</section><section class="section" id="s01"><h2><span class="num">01</span>BitsAndBytesConfig</h2><p>4비트 로딩 설정은 제36장에서 직접 만든 것과 하나씩 대응합니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>설정                          값               제36장의 대응
+load_in_4bit                  True             Linear 가중치를 4비트로 저장
+bnb_4bit_quant_type           &quot;nf4&quot;            Codebook을 NF4로(다른 선택: &quot;fp4&quot;)
+bnb_4bit_use_double_quant     True             absmax 이중 양자화(평균 4.127비트)
+bnb_4bit_compute_dtype        torch.float32    역양자화한 뒤 계산하는 자료형
+(블록 크기)                   64(기본값)       BLOCK = 64
 </code></pre></div>
-<p><code>train()</code>은 <code>requires_grad=True</code>인 파라미터만 Optimizer에 넘깁니다. 지금은 모든 파라미터가 대상이지만, 제26장에서 일부를 얼리면 같은 함수가 자동으로 나머지만 학습합니다.</p>
-<p>일정한 간격마다 학습률, 학습 손실, Gradient 노름, 평가 손실을 기록합니다. 학습이 잘 되는지는 이 기록으로만 판단할 수 있습니다. 평가 손실을 잴 때는 <code>model.eval()</code>과 <code>torch.no_grad()</code>로 학습 상태를 건드리지 않습니다.</p>
-</section><section class="section" id="s02"><h2><span class="num">02</span>Scheduler, Accumulation, Clipping 적용</h2><p>제24장에서 목적만 정리한 세 기법을 실제로 적용합니다.</p>
+<p><code>bnb_4bit_quant_type</code>에는 <code>&quot;fp4&quot;</code>도 있습니다. FP4는 부호·지수·가수를 가진 4비트 부동소수점으로, 정규분포를 따르는 가중치에는 NF4가 더 정확하다는 것이 QLoRA 논문의 결과입니다. 이 교재는 NF4만 씁니다.</p>
+</section><section class="section" id="s02"><h2><span class="num">02</span>하드웨어 조건</h2><p>bitsandbytes는 기능마다 필요한 GPU 세대(Compute Capability, CC)가 다릅니다. bitsandbytes 공식 설치 문서(0.50 기준)의 조건은 다음과 같습니다.</p>
 <table>
 <thead>
 <tr>
-  <th>기법</th>
-  <th>이 장의 설정</th>
-  <th>기록에서 볼 곳</th>
+  <th>기능</th>
+  <th>필요한 CC</th>
+  <th>GT 1030(CC 6.1)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>Warmup + Cosine</td>
-  <td>사전학습 Warmup 20단계, 최대 학습률 1e-3</td>
-  <td>학습률 열이 0에서 올랐다가 0으로 내려간다</td>
+  <td>NF4·FP4 4비트 양자화</td>
+  <td>6.0 이상</td>
+  <td>가능</td>
 </tr>
 <tr>
-  <td>Accumulation</td>
-  <td>Batch 2 × 2번 = 유효 묶음 4</td>
-  <td>메모리는 묶음 2개분만 쓴다</td>
+  <td>8비트 Optimizer</td>
+  <td>6.0 이상</td>
+  <td>가능</td>
 </tr>
 <tr>
-  <td>Clipping</td>
-  <td>노름 1.0</td>
-  <td>Grad노름 열은 <strong>자르기 전</strong> 값이다</td>
+  <td>LLM.int8(8비트 행렬곱)</td>
+  <td>7.5 이상</td>
+  <td>불가</td>
 </tr>
 </tbody>
 </table>
-<p>Grad노름 열에 1.0보다 큰 값이 보이면, 그 단계에서 Clipping이 Gradient를 줄였다는 뜻입니다. 학습 초반이나 학습률이 높은 구간에서 크게 나타나고, 학습이 안정되면 작아집니다. Gradient 노름이 갑자기 수십, 수백으로 치솟거나 NaN이 되면 학습이 무너지는 신호이므로, <code>train()</code>은 NaN·Inf를 만나면 즉시 멈추게 했습니다.</p>
-</section><section class="section" id="s03"><h2><span class="num">03</span>소규모 사전학습</h2><p>설계서의 GT 1030 기준대로 FP32, 시퀀스 128, Batch 2로 학습합니다. 고정 학습 데이터는 블록 25개뿐이므로, 300단계 × 유효 묶음 4 = 1,200블록, 즉 약 48 Epoch을 학습합니다.</p>
-<p>이 규모는 진짜 사전학습과 비교하면 장난감입니다. Qwen2.5가 18조 토큰을 본 데 비해 우리는 3,300토큰을 48번 봅니다. 그래도 원리는 같습니다. 무작위 모델의 손실 12(어휘를 고르게 찍는 수준)가 내려가는 것은, 모델이 한국어 토큰의 분포와 문장 패턴을 배우고 있다는 뜻입니다.</p>
-<p>데이터가 작은 만큼 <strong>과적합</strong>이 빨리 옵니다. 학습 손실은 계속 내려가지만, 어느 순간부터 평가 손실은 다시 올라갑니다. 학습 데이터를 외우기 시작한 것입니다. 실제 학습에서는 평가 손실이 가장 낮았던 지점의 Checkpoint를 고르거나, 그 지점에서 학습을 멈춥니다(Early Stopping).</p>
-</section><section class="section" id="s04"><h2><span class="num">04</span>Hugging Face 형식 저장</h2><p>사전학습을 마친 모델은 제19장과 같은 Hugging Face 형식으로 저장합니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>models/qwen2-tiny-pretrained/
-  config.json            구조(hidden 256, 계층 4, …)
-  model.safetensors      가중치(공유 텐서는 한 번만)
-  generation_config.json 생성 기본값
-  tokenizer.json 등      Qwen2.5 토크나이저
+<p>GT 1030은 QLoRA에 필요한 4비트 양자화와 8비트 Optimizer는 쓸 수 있지만, 8비트로 모델을 불러오는 LLM.int8은 쓸 수 없습니다. 그래서 이 교재는 GPU 경로의 양자화 학습을 4비트(NF4) 하나로 정하고, 8비트는 제33장에서 원리로만 다룹니다.</p>
+<p>GPU가 없는 경우도 있습니다. 이 교재가 쓰는 bitsandbytes 0.50은 CPU 경로(AVX2 이상)도 지원해, 이 교재의 검증 환경처럼 GPU가 없어도 4비트 모델을 불러와 계산할 수 있습니다. 속도는 GPU보다 느리지만 같은 형식, 같은 결과를 확인하기에는 충분합니다.</p>
+</section><section class="section" id="s03"><h2><span class="num">03</span>Compute Dtype과 torch_dtype</h2><p>4비트 모델에는 자료형이 세 가지 있습니다. 헷갈리기 쉬우므로 역할을 나눠 둡니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>자료형                          정하는 곳                    이 교재(GT 1030 기준)
+저장 자료형                     load_in_4bit                 NF4 번호(uint8에 두 개씩)
+계산 자료형                     bnb_4bit_compute_dtype       FP32
+양자화하지 않는 계층의 자료형   from_pretrained의 dtype      FP32
 </code></pre></div>
-<p>이 폴더 하나가 이후 모든 도구의 입력이 됩니다. <code>from_pretrained</code>로 다시 부르면 Full FT를, PEFT(제30장)로 부르면 LoRA를, 제6부의 변환 도구로 부르면 GGUF를 만들 수 있습니다. 저장이 제대로 되었는지는 <strong>재로딩 전후의 출력이 비트 하나까지 같은지</strong>로 확인합니다.</p>
-</section><section class="section" id="s05"><h2><span class="num">05</span>Full Fine-tuning</h2><p>사전학습한 모델을 다시 불러 <strong>자전거 정비</strong> 분야의 문장(학습 8블록, 평가 1블록)으로 모든 가중치를 다시 학습합니다. 이것이 Full Fine-tuning입니다. 사전학습보다 작은 학습률(3e-4)과 짧은 학습(60단계)을 씁니다. 이미 배운 것을 크게 흔들지 않고 새 분야에 맞추기 위해서입니다. 도메인 평가 데이터는 블록 1개(예측 127개)뿐이므로, 도메인 PPL의 작은 차이는 우연일 수 있습니다. 이 장과 제26·29·30장에서는 크게 벌어지는 차이만 해석합니다.</p>
-<p>평가는 두 가지로 합니다. 새 분야를 배웠는지 보는 <strong>도메인 평가</strong>, 원래 알던 것을 잊지 않았는지 보는 <strong>일반 평가</strong>입니다. 파인튜닝은 언제나 이 두 숫자를 함께 봐야 합니다. 도메인 손실만 내려가고 일반 손실이 크게 오른다면, 모델은 새것을 배우는 대신 옛것을 잊은 것입니다. 이 현상을 <strong>파국적 망각</strong>(Catastrophic Forgetting)이라 합니다.</p>
-</section><section class="section" id="s06"><h2><span class="num">06</span>0.5B Full FT 메모리 계산</h2><p>Qwen2-Tiny의 Full FT는 가중치·Gradient·AdamW 상태를 합쳐 640MiB의 고정 메모리가 필요하고, 활성값을 더해도 설계 예산(GT 1030 VRAM 2GB 중 약 1.5GB)에 들어갑니다. 같은 계산을 Qwen2.5-0.5B에 적용하면 다음과 같습니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>가중치     494,032,768 × 4바이트 = 1.84GiB
-Gradient   494,032,768 × 4바이트 = 1.84GiB
-AdamW 상태 494,032,768 × 8바이트 = 3.68GiB
-───────────────────────────────────────────
-합계                               7.36GiB   + 활성값  &gt;  GT 1030 2GiB
+<p><strong>계산 자료형</strong>은 4비트 가중치를 복원해 행렬곱을 할 때의 자료형입니다. 최신 GPU에서는 BF16이 빠르지만, GT 1030은 BF16 연산이 없고 FP16 연산은 1/64 속도이므로(제02·32장) FP32로 정합니다.</p>
+<p><strong>양자화하지 않는 계층</strong>은 Embedding, RMSNorm, 편향입니다. bitsandbytes는 Linear만 4비트로 바꾸고, Embedding은 그대로 둡니다. Qwen2.5-0.5B의 Embedding은 151,936 × 896개, FP32로 약 519MiB입니다. 4비트 Linear 168개를 모두 합친 것(약 171MiB)보다 세 배나 큽니다. 4비트 모델의 메모리는 Embedding이 지배합니다. <code>dtype=torch.float16</code>으로 Embedding을 절반(약 260MiB)으로 줄일 수도 있지만, 그러면 Embedding 출력과 RMSNorm 계산이 FP16이 되어 GT 1030에서 느려지므로 이 교재는 FP32를 씁니다.</p>
+</section><section class="section" id="s04"><h2><span class="num">04</span>버전 조합 확정</h2><p>양자화 라이브러리는 PyTorch·CUDA 빌드와 맞물려 있어, 한 가지만 바꿔도 동작하지 않을 수 있습니다. 그래서 이 장에서 지금까지 실제로 검증한 버전을 <code>requirements</code>에 고정합니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>requirements/cpu.txt      torch 2.15.0+cpu, transformers 5.24.0, peft 0.22.0, bitsandbytes 0.50.2 …
+                          → 교재 검증 환경에서 제1~37장 전체 테스트 통과
+requirements/gt1030.txt   torch 2.14.0+cu126 + 같은 라이브러리 버전
+                          → 후보 조합. GT 1030 실제 실행은 미검증
 </code></pre></div>
-<p>가중치만으로 이미 2GiB에 가깝습니다. 0.5B 모델의 Full Fine-tuning은 GT 1030에서 <strong>실행 불가</strong>로 판정합니다. 메모리가 충분한 CPU에서는 가능하지만 매우 느립니다. 이 제약이 제26장부터 다루는 PEFT와 LoRA의 출발점입니다.</p>
-</section><section class="section" id="s07"><h2><span class="num">07</span>핵심 실습</h2><h3>학습 루프</h3>
-<p>파일명: <code>examples/ch25/trainer.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제25장: 제3·4부 학습 실습이 함께 쓰는 학습 루프
+<p>GT 1030 경로의 조건은 세 가지입니다. PyTorch는 Pascal을 지원하는 마지막 CUDA 12.6 빌드인 2.14 계열(제01장), NVIDIA 드라이버는 570 이상, bitsandbytes는 CC 6.0 이상을 지원하는 공식 배포판입니다. 학습자 장비에서 이 장의 실습을 GPU로 실행해 통과하면, 그 결과를 <code>gt1030.txt</code>의 주석에 기록합니다.</p>
+</section><section class="section" id="s05"><h2><span class="num">05</span>핵심 실습</h2><p>파일명: <code>examples/ch37/load_4bit.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제37장 핵심 실습: bitsandbytes로 Qwen2.5-0.5B-Instruct를 NF4 4비트로 불러와 자료형·메모리·PPL을 확인한다
 #
-# 한 단계 = (묶음 accum개) × [순전파 → 손실 ÷ accum → 역전파]
-#           → Gradient Clipping → optimizer.step → scheduler.step → zero_grad
+# 실행: python examples/ch37/load_4bit.py
+#
+# GPU(CC 6.0 이상)가 있으면 GPU에, 없으면 bitsandbytes CPU 경로로 불러온다.
 
 import math
 import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / &quot;ch24&quot;))
-
-import torch  # noqa: E402
-
-from optim_memory import warmup_cosine  # noqa: E402  (제24장)
-
-
-@torch.no_grad()
-def eval_loss(model, blocks: torch.Tensor, device: str) -&gt; float:
-    &quot;&quot;&quot;블록마다 모델의 평균 손실을 구해 다시 평균(블록마다 유효 토큰 수가 같으므로 전체 평균과 같다)&quot;&quot;&quot;
-    was_training = model.training
-    model.eval()
-    losses = [model(input_ids=b.to(device), labels=b.to(device)).loss.item() for b in blocks.split(1)]
-    model.train(was_training)
-    return sum(losses) / len(losses)
-
-
-def train(model, train_blocks, eval_sets: dict, *, steps: int, batch: int = 2, accum: int = 2,
-          lr: float = 1e-3, warmup: int = 10, clip: float = 1.0, weight_decay: float = 0.1,
-          device: str = &quot;cpu&quot;, seed: int = 0, log_every: int = 25) -&gt; list:
-    &quot;&quot;&quot;학습 가능한(requires_grad=True) 파라미터만 AdamW로 학습하고 기록(list of dict)을 돌려준다.&quot;&quot;&quot;
-    torch.manual_seed(seed)
-    g = torch.Generator().manual_seed(seed)
-    model.to(device).train()
-    params = [p for p in model.parameters() if p.requires_grad]
-    opt = torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
-    sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: warmup_cosine(s, warmup, steps))
-
-    def record(step, train_loss, grad_norm):
-        row = {&quot;step&quot;: step, &quot;lr&quot;: opt.param_groups[0][&quot;lr&quot;], &quot;train&quot;: train_loss, &quot;grad_norm&quot;: grad_norm}
-        for name, blocks in eval_sets.items():
-            row[name] = eval_loss(model, blocks, device)
-        return row
-
-    history = [record(0, float(&quot;nan&quot;), float(&quot;nan&quot;))]
-    for step in range(1, steps + 1):
-        total = 0.0
-        for _ in range(accum):                                       # Gradient Accumulation
-            idx = torch.randint(0, len(train_blocks), (batch,), generator=g)
-            x = train_blocks[idx].to(device)
-            loss = model(input_ids=x, labels=x).loss / accum
-            loss.backward()
-            total += loss.item()
-        grad_norm = torch.nn.utils.clip_grad_norm_(params, clip).item()   # 자르기 전 노름
-        if not math.isfinite(grad_norm):
-            raise RuntimeError(f&quot;{step}단계에서 Gradient가 NaN·Inf&quot;)
-        opt.step()
-        sched.step()
-        opt.zero_grad(set_to_none=True)
-        if step % log_every == 0 or step == steps:
-            history.append(record(step, total, grad_norm))
-    model.eval()
-    return history
-</code></pre></div>
-<h3>사전학습 → 저장 → 재로딩 → Full Fine-tuning</h3>
-<p>파일명: <code>examples/ch25/pretrain_tiny.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제25장 핵심 실습: Qwen2-Tiny 사전학습 → 저장 → 재로딩 → Full Fine-tuning
-#
-# 실행: python examples/ch25/pretrain_tiny.py
-#
-# 저장: models/qwen2-tiny-pretrained/, models/qwen2-tiny-bike/ (.gitignore로 커밋 제외)
-# 손실 곡선: examples/ch25/loss_curve.png (.gitignore로 커밋 제외)
-
-import json
-import math
-import resource
-import sys
-import time
+from collections import Counter
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-for p in (HERE, HERE.parent, HERE.parent / &quot;ch19&quot;, HERE.parent / &quot;ch24&quot;):
+for p in (HERE.parent, HERE.parent / &quot;ch22&quot;):
     sys.path.insert(0, str(p))
 
 import torch  # noqa: E402
-from transformers import Qwen2ForCausalLM  # noqa: E402
+from transformers import AutoModelForCausalLM, BitsAndBytesConfig  # noqa: E402
 from transformers.utils import logging  # noqa: E402
 
-from common.device import select_device  # noqa: E402
 from common.fixed_data import load_blocks  # noqa: E402
+from common.models import QWEN_ID, QWEN_REVISION  # noqa: E402
 from common.qwen import load_tokenizer  # noqa: E402
-from hf_compat import to_hf  # noqa: E402              (제19장)
-from optim_memory import full_ft_budget  # noqa: E402  (제24장)
-from tiny_model import Qwen2Tiny, init_weights  # noqa: E402
-from trainer import eval_loss, train  # noqa: E402
+from qwen_ppl import evaluate  # noqa: E402            (제22장)
 
 logging.disable_progress_bar()
-MODELS = HERE.parents[1] / &quot;models&quot;
-PRE_STEPS, FT_STEPS = 300, 60
+MiB = 2 ** 20
 
 
-def show(history: list, keys: tuple) -&gt; None:
-    print(&quot;  &quot; + f&quot;{'단계':&gt;5}{'학습률':&gt;9}{'학습':&gt;8}{'Grad노름':&gt;10}&quot; + &quot;&quot;.join(f&quot;{k:&gt;9}&quot; for k in keys))
-    for r in history:
-        print(&quot;  &quot; + f&quot;{r['step']:&gt;5}{r['lr']:&gt;9.1e}{r['train']:&gt;8.3f}{r['grad_norm']:&gt;10.2f}&quot;
-              + &quot;&quot;.join(f&quot;{r[k]:&gt;9.3f}&quot; for k in keys))
+def hardware() -&gt; dict:
+    &quot;&quot;&quot;bitsandbytes 기능별 하드웨어 조건(공식 문서: NF4 CC 6.0+, LLM.int8 CC 7.5+)&quot;&quot;&quot;
+    if not torch.cuda.is_available():
+        return {&quot;device&quot;: &quot;cpu&quot;, &quot;name&quot;: &quot;CPU&quot;, &quot;cc&quot;: None, &quot;nf4&quot;: True, &quot;int8&quot;: True}
+    major, minor = torch.cuda.get_device_capability(0)
+    cc = major + minor / 10
+    return {&quot;device&quot;: &quot;cuda&quot;, &quot;name&quot;: torch.cuda.get_device_name(0), &quot;cc&quot;: cc,
+            &quot;nf4&quot;: cc &gt;= 6.0, &quot;int8&quot;: cc &gt;= 7.5}
 
 
-def plot(pre: list, ft: list, path: Path) -&gt; None:
-    try:
-        import matplotlib
-        matplotlib.use(&quot;Agg&quot;)
-        import matplotlib.pyplot as plt
-    except ImportError:
-        return
-    fig, ax = plt.subplots(figsize=(7, 4))
-    ax.plot([r[&quot;step&quot;] for r in pre], [r[&quot;일반평가&quot;] for r in pre], label=&quot;pretrain: eval&quot;)
-    ax.plot([r[&quot;step&quot;] for r in pre[1:]], [r[&quot;train&quot;] for r in pre[1:]], label=&quot;pretrain: train&quot;)
-    off = pre[-1][&quot;step&quot;]
-    ax.plot([off + r[&quot;step&quot;] for r in ft], [r[&quot;도메인평가&quot;] for r in ft], label=&quot;full FT: domain eval&quot;)
-    ax.plot([off + r[&quot;step&quot;] for r in ft], [r[&quot;일반평가&quot;] for r in ft], label=&quot;full FT: general eval&quot;)
-    ax.set_xlabel(&quot;step&quot;)
-    ax.set_ylabel(&quot;loss&quot;)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(path, dpi=120)
+def nf4_config() -&gt; BitsAndBytesConfig:
+    &quot;&quot;&quot;제36장과 같은 NF4 + 이중 양자화, 계산은 FP32(GT 1030 기준)&quot;&quot;&quot;
+    return BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type=&quot;nf4&quot;,
+                              bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.float32)
+
+
+def load_nf4(device: str):
+    return AutoModelForCausalLM.from_pretrained(
+        QWEN_ID, revision=QWEN_REVISION, quantization_config=nf4_config(),
+        dtype=torch.float32, device_map=device).eval()       # dtype: 양자화하지 않는 계층의 자료형
+
+
+def memory_parts(model) -&gt; dict:
+    &quot;&quot;&quot;파라미터·버퍼 바이트를 '4비트 가중치'와 '그 밖'으로 나눈다(4비트 메타데이터는 따로).&quot;&quot;&quot;
+    parts = Counter()
+    for name, p in model.named_parameters():
+        key = &quot;4비트 가중치(번호)&quot; if p.dtype == torch.uint8 else (
+            &quot;Embedding(= LM Head)&quot; if &quot;embed_tokens&quot; in name else &quot;편향·RMSNorm&quot;)
+        parts[key] += p.numel() * p.element_size()
+    meta = 0
+    for mod in model.modules():
+        qs = getattr(getattr(mod, &quot;weight&quot;, None), &quot;quant_state&quot;, None)
+        if qs is not None:
+            meta += qs.absmax.numel() * qs.absmax.element_size()
+            if qs.state2 is not None:
+                meta += qs.state2.absmax.numel() * qs.state2.absmax.element_size()
+    parts[&quot;4비트 메타데이터(absmax)&quot;] = meta
+    return dict(parts)
 
 
 def main() -&gt; None:
-    device, _ = select_device()
+    hw = hardware()
+    print(&quot;── 1. 하드웨어 조건 ──&quot;)
+    print(f&quot;  장치 {hw['name']}, Compute Capability {hw['cc'] or '해당 없음'}&quot;)
+    print(f&quot;  NF4 4비트: {'가능' if hw['nf4'] else '불가'}, LLM.int8: {'가능' if hw['int8'] else '불가'}&quot;
+          f&quot;{' (CPU 경로)' if hw['device'] == 'cpu' else ''}&quot;)
+
+    print(&quot;\n── 2. BitsAndBytesConfig(제36장과의 대응) ──&quot;)
+    c = nf4_config()
+    for k, meaning in ((&quot;bnb_4bit_quant_type&quot;, &quot;Codebook(제36장 NF4)&quot;),
+                       (&quot;bnb_4bit_use_double_quant&quot;, &quot;absmax 이중 양자화&quot;),
+                       (&quot;bnb_4bit_compute_dtype&quot;, &quot;역양자화 후 계산 자료형&quot;)):
+        print(f&quot;  {k:&lt;27}{str(getattr(c, k)):&lt;16}{meaning}&quot;)
+
+    print(&quot;\n── 3. 4비트 로딩: 계층 종류와 자료형 ──&quot;)
     tok = load_tokenizer()
-    data = {s: load_blocks(tok, s) for s in (&quot;train&quot;, &quot;eval&quot;, &quot;domain_train&quot;, &quot;domain_eval&quot;)}
-    print(f&quot;장치 {device}, 블록: &quot; + &quot;, &quot;.join(f&quot;{k} {tuple(v.shape)}&quot; for k, v in data.items()))
+    model = load_nf4(hw[&quot;device&quot;])
+    kinds = Counter(type(m).__name__ for m in model.modules() if not list(m.children()))
+    print(f&quot;  말단 계층 {dict(kinds)}&quot;)
+    q = model.model.layers[0].self_attn.q_proj
+    print(f&quot;  q_proj: {type(q).__name__}, 저장 {q.weight.dtype} {tuple(q.weight.shape)} &quot;
+          f&quot;(896 × 896 ÷ 2 = {896 * 896 // 2:,}바이트), 계산 {q.compute_dtype}&quot;)
+    qs = q.weight.quant_state
+    print(f&quot;  블록 크기 {qs.blocksize}, 이중 양자화 블록 {qs.state2.blocksize}, Codebook 값 {qs.code.numel()}개&quot;)
+    print(f&quot;  Embedding {model.model.embed_tokens.weight.dtype}, LM Head 공유 &quot;
+          f&quot;{model.lm_head.weight is model.model.embed_tokens.weight}&quot;)
 
-    model = to_hf(init_weights(Qwen2Tiny(), seed=0))
-    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f&quot;학습 가능 파라미터 {trainable:,}개(전체), FP32·AdamW 고정 메모리 &quot;
-          f&quot;{sum(full_ft_budget(trainable, 'AdamW').values()) / 2**20:.0f}MiB\n&quot;)
+    print(&quot;\n── 4. 메모리(파라미터 기준) ──&quot;)
+    parts = memory_parts(model)
+    for k, v in parts.items():
+        print(f&quot;  {k:&lt;26}{v / MiB:8.1f}MiB&quot;)
+    total = sum(parts.values())
+    print(f&quot;  {'합계':&lt;26}{total / MiB:8.1f}MiB  (FP32 전체 {494_032_768 * 4 / MiB:,.0f}MiB의 &quot;
+          f&quot;{total / (494_032_768 * 4):.0%})&quot;)
+    print(f&quot;  get_memory_footprint() {model.get_memory_footprint() / MiB:.1f}MiB&quot;)
+    if hw[&quot;device&quot;] == &quot;cuda&quot;:
+        print(f&quot;  GPU 최대 할당 {torch.cuda.max_memory_allocated() / MiB:.0f}MiB&quot;)
 
-    print(f&quot;── 1. 사전학습: Batch 2 × Accumulation 2 = 유효 4, {PRE_STEPS}단계, lr 1e-3, Warmup 20 ──&quot;)
-    t0 = time.perf_counter()
-    pre = train(model, data[&quot;train&quot;], {&quot;일반평가&quot;: data[&quot;eval&quot;]}, steps=PRE_STEPS,
-                lr=1e-3, warmup=20, device=device, log_every=50)
-    show(pre, (&quot;일반평가&quot;,))
-    print(f&quot;  걸린 시간 {time.perf_counter() - t0:.0f}초&quot;)
-
-    print(&quot;\n── 2. Hugging Face 형식 저장 → 재로딩 → 출력 비교 ──&quot;)
-    pre_dir = MODELS / &quot;qwen2-tiny-pretrained&quot;
-    model.save_pretrained(pre_dir)
-    tok.save_pretrained(pre_dir)
-    reloaded = Qwen2ForCausalLM.from_pretrained(pre_dir, dtype=torch.float32).to(device).eval()
-    probe = data[&quot;eval&quot;][:1].to(device)
-    with torch.no_grad():
-        same = torch.equal(model(probe).logits, reloaded(probe).logits)
-    print(f&quot;  저장 파일 {sorted(f.name for f in pre_dir.iterdir())}&quot;)
-    print(f&quot;  재로딩 전후 Logits 완전히 같음: {same}&quot;)
-
-    before = {k: eval_loss(reloaded, data[k], device) for k in (&quot;eval&quot;, &quot;domain_eval&quot;)}
-    print(f&quot;\n── 3. Full Fine-tuning(자전거 정비 도메인): {FT_STEPS}단계, lr 3e-4 ──&quot;)
-    ft = train(reloaded, data[&quot;domain_train&quot;], {&quot;도메인평가&quot;: data[&quot;domain_eval&quot;], &quot;일반평가&quot;: data[&quot;eval&quot;]},
-               steps=FT_STEPS, lr=3e-4, warmup=5, device=device, log_every=20)
-    show(ft, (&quot;도메인평가&quot;, &quot;일반평가&quot;))
-    after = {k: eval_loss(reloaded, data[k], device) for k in (&quot;eval&quot;, &quot;domain_eval&quot;)}
-    print(&quot;  PPL 비교       학습 전      학습 후&quot;)
-    for k, label in ((&quot;domain_eval&quot;, &quot;도메인 평가&quot;), (&quot;eval&quot;, &quot;일반 평가&quot;)):
-        print(f&quot;  {label:&lt;10}{math.exp(before[k]):&gt;10.1f}{math.exp(after[k]):&gt;12.1f}&quot;)
-    reloaded.save_pretrained(MODELS / &quot;qwen2-tiny-bike&quot;)
-    tok.save_pretrained(MODELS / &quot;qwen2-tiny-bike&quot;)
-
-    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024      # Linux: KiB → MiB
-    print(f&quot;\n── 4. 메모리: 프로세스 최대 RSS {peak:,.0f}MiB(CPU, 모델 두 벌·데이터·라이브러리 포함) ──&quot;)
-    if device == &quot;cuda&quot;:
-        print(f&quot;  GPU 최대 할당 {torch.cuda.max_memory_allocated() / 2**20:,.0f}MiB&quot;)
-    b = full_ft_budget(494_032_768, &quot;AdamW&quot;)
-    print(f&quot;  0.5B Full FT 고정 메모리 {sum(b.values()) / 2**30:.2f}GiB &gt; GT 1030 2GiB → 실행 불가&quot;)
-
-    plot(pre, ft, HERE / &quot;loss_curve.png&quot;)
-    (HERE / &quot;history.json&quot;).write_text(json.dumps({&quot;pretrain&quot;: pre, &quot;full_ft&quot;: ft}, ensure_ascii=False,
-                                                  indent=1), encoding=&quot;utf-8&quot;)
+    print(&quot;\n── 5. 고정 평가 데이터 PPL ──&quot;)
+    r = evaluate(model, load_blocks(tok, &quot;eval&quot;), hw[&quot;device&quot;])
+    print(f&quot;  bitsandbytes NF4 + 이중 양자화  PPL {math.exp(r['loss']):.2f}&quot;)
+    print(&quot;  (참고: FP32 21.45, 제36장 직접 구현 NF4 + 이중 양자화 27.87)&quot;)
 
 
 if __name__ == &quot;__main__&quot;:
     main()
 </code></pre></div>
-<p>실행(교재 검증 환경의 2코어 CPU에서 약 8분):</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch25/pretrain_tiny.py
+<p>실행:</p>
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch37/load_4bit.py
 </code></pre></div>
-<p>실제 실행 결과(교재 검증 환경):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>장치 cpu, 블록: train (25, 128), eval (5, 128), domain_train (8, 128), domain_eval (1, 128)
-학습 가능 파라미터 41,914,112개(전체), FP32·AdamW 고정 메모리 640MiB
+<p>실제 실행 결과(교재 검증 환경, CPU 경로, bitsandbytes 0.50.2):</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 1. 하드웨어 조건 ──
+  장치 CPU, Compute Capability 해당 없음
+  NF4 4비트: 가능, LLM.int8: 가능 (CPU 경로)
 
-── 1. 사전학습: Batch 2 × Accumulation 2 = 유효 4, 300단계, lr 1e-3, Warmup 20 ──
-     단계      학습률      학습    Grad노름     일반평가
-      0  5.0e-05     nan       nan   11.990
-     50  9.7e-04   5.836      2.00    6.364
-    100  8.1e-04   4.585      5.20    5.973
-    150  5.6e-04   3.077      6.21    5.622
-    200  2.8e-04   1.979      5.17    5.705
-    250  7.7e-05   0.911      1.42    5.797
-    300  0.0e+00   0.567      0.63    5.837
-  걸린 시간 493초
+── 2. BitsAndBytesConfig(제36장과의 대응) ──
+  bnb_4bit_quant_type        nf4             Codebook(제36장 NF4)
+  bnb_4bit_use_double_quant  True            absmax 이중 양자화
+  bnb_4bit_compute_dtype     torch.float32   역양자화 후 계산 자료형
 
-── 2. Hugging Face 형식 저장 → 재로딩 → 출력 비교 ──
-  저장 파일 ['chat_template.jinja', 'config.json', 'generation_config.json', 'model.safetensors', 'tokenizer.json', 'tokenizer_config.json']
-  재로딩 전후 Logits 완전히 같음: True
+── 3. 4비트 로딩: 계층 종류와 자료형 ──
+  말단 계층 {'Embedding': 1, 'Linear4bit': 168, 'SiLUActivation': 24, 'Qwen2RMSNorm': 49, 'Qwen2RotaryEmbedding': 1, 'Linear': 1}
+  q_proj: Linear4bit, 저장 torch.uint8 (401408, 1) (896 × 896 ÷ 2 = 401,408바이트), 계산 torch.float32
+  블록 크기 64, 이중 양자화 블록 256, Codebook 값 16개
+  Embedding torch.float32, LM Head 공유 True
 
-── 3. Full Fine-tuning(자전거 정비 도메인): 60단계, lr 3e-4 ──
-     단계      학습률      학습    Grad노름    도메인평가     일반평가
-      0  6.0e-05     nan       nan    6.785    5.837
-     20  2.5e-04   3.384      5.26    5.499    5.873
-     40  8.8e-05   2.091      1.77    5.144    5.975
-     60  0.0e+00   1.546      1.09    5.056    5.989
-  PPL 비교       학습 전      학습 후
-  도메인 평가         884.9       157.0
-  일반 평가          342.8       399.2
+── 4. 메모리(파라미터 기준) ──
+  Embedding(= LM Head)         519.3MiB
+  4비트 가중치(번호)                  170.6MiB
+  편향·RMSNorm                     0.3MiB
+  4비트 메타데이터(absmax)              5.4MiB
+  합계                           695.6MiB  (FP32 전체 1,885MiB의 37%)
+  get_memory_footprint() 690.2MiB
 
-── 4. 메모리: 프로세스 최대 RSS 1,743MiB(CPU, 모델 두 벌·데이터·라이브러리 포함) ──
-  0.5B Full FT 고정 메모리 7.36GiB &gt; GT 1030 2GiB → 실행 불가
+── 5. 고정 평가 데이터 PPL ──
+  bitsandbytes NF4 + 이중 양자화  PPL 27.78
+  (참고: FP32 21.45, 제36장 직접 구현 NF4 + 이중 양자화 27.87)
 </code></pre></div>
-<p>손실 곡선은 <code>examples/ch25/loss_curve.png</code>로 저장됩니다. 걸린 시간과 메모리는 컴퓨터마다 다르며, 손실 값은 같은 장치·같은 라이브러리에서 다시 실행하면 같게 나옵니다.</p>
 <p><strong>결과 읽기</strong></p>
 <ul>
-<li><strong>1번 사전학습</strong>에서 일반 평가 손실이 11.99에서 150단계의 5.62까지 내려갑니다. 무작위 모델이 고정 데이터의 문장 패턴을 배웠습니다. PPL로 보면 약 16만에서 약 280으로 줄었습니다.</li>
-<li>150단계 이후 학습 손실은 0.57까지 계속 내려가지만 평가 손실은 5.62 → 5.84로 다시 오릅니다. <strong>과적합</strong>입니다. 학습 손실만 봤다면 학습이 아주 잘 된 것으로 착각했을 것입니다.</li>
-<li>학습률 열이 처음 20단계 동안 올라갔다가 Cosine 곡선을 따라 0으로 내려가고, Grad노름은 학습 중반 5~6까지 커졌다가 학습률이 줄면서 1 아래로 내려갑니다. 노름이 1을 넘은 단계는 Clipping이 Gradient를 줄였습니다.</li>
-<li><strong>2번</strong>에서 저장한 모델을 다시 불러온 결과가 원래 모델과 비트 하나까지 같습니다. 이 폴더를 이후 장에서 그대로 씁니다.</li>
-<li><strong>3번 Full FT</strong>에서 도메인 평가 PPL이 884.9 → 157.0으로 크게 줄었습니다. 자전거 정비 문장의 표현을 배웠습니다. 그러나 일반 평가 PPL은 342.8 → 399.2로 올랐습니다. 60단계의 짧은 학습만으로도 원래 알던 것을 일부 잊었습니다. <strong>망각</strong>입니다.</li>
-<li><strong>4번</strong>의 최대 RSS는 CPU 프로세스 전체(모델 두 벌, 라이브러리 포함)의 값입니다. GT 1030 경로에서는 GPU 최대 할당량이 함께 출력되며, 이 값을 설계 예산(약 1.5GB 이하)과 비교합니다(교재 검증 환경 미검증).</li>
+<li><strong>1번</strong>은 GPU가 없어 CPU 경로로 판정했습니다. GT 1030에서는 CC 6.1로 NF4 가능, LLM.int8 불가로 표시되어야 합니다.</li>
+<li><strong>3번</strong>에서 Linear 168개(24계층 × 7종)가 모두 <code>Linear4bit</code>로 바뀌었고, LM Head(<code>Linear</code> 1개)와 Embedding은 그대로입니다. q_proj의 가중치는 <code>uint8</code> 401,408개로, 896 × 896개의 4비트 번호를 바이트 하나에 두 개씩 담은 크기입니다(제34장). 블록 64, 이중 양자화 블록 256, Codebook 16개는 제36장의 설정과 같습니다.</li>
+<li><strong>4번</strong>에서 4비트 모델의 파라미터 메모리는 약 696MiB로 FP32(1,885MiB)의 37%입니다. 그중 519MiB가 Embedding입니다. 4비트 가중치와 메타데이터는 합쳐서 176MiB에 불과합니다.</li>
+<li><strong>5번</strong>에서 실제 bitsandbytes 4비트 모델의 PPL은 27.78로, 제36장의 직접 구현(27.87)과 거의 같습니다. 작은 차이는 이중 양자화 방식의 차이입니다. 제36장은 absmax를 INT8로 단순화했고, bitsandbytes는 블록 단위 8비트 부동소수점 형식을 씁니다. 직접 구현으로 예측한 품질이 실제 라이브러리에서 재현되었습니다.</li>
 </ul>
-<p>이 결과에서 제3부의 다음 질문이 나옵니다. 모든 가중치를 바꾸지 않고, 일부만 학습하면 망각을 줄이면서 메모리도 아낄 수 있지 않을까요? 제26장에서 확인합니다.</p>
-</section><section class="section" id="s08"><h2><span class="num">08</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch25/test_ch25.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제25장 검증 테스트
+<p>GT 1030 경로에서는 4번에 GPU 최대 할당량이 함께 출력됩니다. 파라미터 696MiB에 CUDA 실행 환경이 차지하는 메모리(수백 MiB)가 더해지며, 이 교재의 GT 1030 메모리 예산(QLoRA 학습 전체 약 1.5GB 내외) 안에서 학습 공간이 남는지가 제38장의 주제입니다.</p>
+</section><section class="section" id="s06"><h2><span class="num">06</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch37/test_ch37.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제37장 검증 테스트
 #
-# 실행: python -m pytest examples/ch25 -q
-#
-# 전체 학습(수 분)은 pretrain_tiny.py로 실행하고, 테스트는 짧은 학습과 저장된 기록을 확인한다.
+# 실행: python -m pytest examples/ch37 -q
 
-import json
-import math
 import sys
 from pathlib import Path
 
@@ -918,74 +831,59 @@ import pytest
 import torch
 
 HERE = Path(__file__).resolve().parent
-for p in (HERE, HERE.parent, HERE.parent / &quot;ch19&quot;, HERE.parent / &quot;ch24&quot;):
+for p in (HERE, HERE.parent, HERE.parent / &quot;ch22&quot;, HERE.parent / &quot;ch36&quot;):
     sys.path.insert(0, str(p))
 
-from tiny_model import TINY, Qwen2Tiny, init_weights  # noqa: E402
-from trainer import eval_loss, train  # noqa: E402
+pytest.importorskip(&quot;bitsandbytes&quot;)
+
+from load_4bit import hardware, memory_parts, nf4_config  # noqa: E402
 
 
-def small_tiny():
-    &quot;&quot;&quot;테스트용으로 계층 1개, 어휘 앞부분만 쓰는 축소판(같은 Qwen2 구조)&quot;&quot;&quot;
-    from transformers import Qwen2Config, Qwen2ForCausalLM
-    cfg = Qwen2Config(**{**TINY, &quot;num_hidden_layers&quot;: 1, &quot;vocab_size&quot;: 512}, tie_word_embeddings=True)
+def test_hardware_rules():
+    hw = hardware()
+    if hw[&quot;device&quot;] == &quot;cuda&quot;:
+        assert hw[&quot;nf4&quot;] == (hw[&quot;cc&quot;] &gt;= 6.0) and hw[&quot;int8&quot;] == (hw[&quot;cc&quot;] &gt;= 7.5)
+    else:
+        assert hw[&quot;nf4&quot;]
+
+
+def test_config_matches_ch36():
+    c = nf4_config()
+    assert c.load_in_4bit and c.bnb_4bit_quant_type == &quot;nf4&quot; and c.bnb_4bit_use_double_quant
+    assert c.bnb_4bit_compute_dtype == torch.float32
+
+
+def test_linear4bit_matches_own_nf4():
+    import bitsandbytes as bnb
+    from nf4 import nf4_fake
     torch.manual_seed(0)
-    return Qwen2ForCausalLM(cfg)
+    lin = torch.nn.Linear(128, 64, bias=False)
+    q = bnb.nn.Linear4bit(128, 64, bias=False, compute_dtype=torch.float32, quant_type=&quot;nf4&quot;)
+    q.weight = bnb.nn.Params4bit(lin.weight.data.clone(), requires_grad=False, quant_type=&quot;nf4&quot;,
+                                compress_statistics=False)                # 이중 양자화 없이 비교
+    q = q.to(&quot;cpu&quot;) if not torch.cuda.is_available() else q.cuda()
+    x = torch.randn(3, 128, device=q.weight.device)
+    expect = x.cpu() @ nf4_fake(lin.weight.data).T                  # 제36장 직접 구현(이중 양자화 없음)
+    torch.testing.assert_close(q(x).cpu(), expect, atol=1e-4, rtol=1e-4)
 
 
-def test_short_training_reduces_loss():
-    torch.manual_seed(0)
-    blocks = torch.randint(0, 64, (6, 32))            # 어휘 64개만 쓰는 무작위 데이터
-    blocks[:, 1::2] = blocks[:, ::2] + 1                # 규칙: 짝수 위치 다음은 +1
-    model = small_tiny()
-    hist = train(model, blocks, {&quot;평가&quot;: blocks[:2]}, steps=40, batch=2, accum=2, lr=3e-3,
-                 warmup=5, log_every=20)
-    assert hist[-1][&quot;평가&quot;] &lt; hist[0][&quot;평가&quot;] - 1.0
-    assert all(math.isfinite(r[&quot;grad_norm&quot;]) for r in hist[1:])
-
-
-def test_scheduler_ends_at_zero_and_clipping_recorded():
-    blocks = torch.randint(0, 64, (4, 16))
-    hist = train(small_tiny(), blocks, {}, steps=10, warmup=2, log_every=5, clip=0.5)
-    assert hist[-1][&quot;lr&quot;] == pytest.approx(0.0, abs=1e-12)
-    assert hist[1][&quot;grad_norm&quot;] &gt; 0                     # 자르기 전 노름을 기록
-
-
-def test_frozen_parameters_are_not_trained():
-    model = small_tiny()
-    emb_before = model.model.embed_tokens.weight.detach().clone()
-    model.model.embed_tokens.weight.requires_grad_(False)
-    train(model, torch.randint(0, 64, (4, 16)), {}, steps=5, warmup=1, log_every=5)
-    assert torch.equal(model.model.embed_tokens.weight, emb_before)
-
-
-def test_save_reload_identical(tmp_path):
-    from transformers import Qwen2ForCausalLM
-    model = small_tiny().eval()
-    model.save_pretrained(tmp_path)
-    again = Qwen2ForCausalLM.from_pretrained(tmp_path, dtype=torch.float32).eval()
-    ids = torch.randint(0, 512, (1, 12))
-    with torch.no_grad():
-        assert torch.equal(model(ids).logits, again(ids).logits)
-
-
-def test_recorded_history():
-    path = HERE / &quot;history.json&quot;
-    if not path.exists():
-        pytest.skip(&quot;pretrain_tiny.py를 먼저 실행&quot;)
-    h = json.loads(path.read_text(encoding=&quot;utf-8&quot;))
-    pre, ft = h[&quot;pretrain&quot;], h[&quot;full_ft&quot;]
-    assert pre[0][&quot;일반평가&quot;] == pytest.approx(math.log(151936), abs=0.2)
-    assert min(r[&quot;일반평가&quot;] for r in pre) &lt; 6.0                    # 사전학습으로 크게 감소
-    assert ft[-1][&quot;도메인평가&quot;] &lt; ft[0][&quot;도메인평가&quot;] - 1.0           # 도메인 학습 효과
-    assert ft[-1][&quot;일반평가&quot;] &gt; ft[0][&quot;일반평가&quot;]                    # 일반 능력 일부 손실(망각)
+def test_qwen_4bit_memory():
+    try:
+        from load_4bit import load_nf4
+        model = load_nf4(hardware()[&quot;device&quot;])
+    except Exception:
+        pytest.skip(&quot;Qwen 모델이 아직 내려받아지지 않음&quot;)
+    parts = memory_parts(model)
+    assert parts[&quot;Embedding(= LM Head)&quot;] == 151_936 * 896 * 4          # 양자화하지 않음(약 519MiB)
+    assert parts[&quot;4비트 가중치(번호)&quot;] == 24 * (896 * 896 * 2 + 128 * 896 * 2 + 4864 * 896 * 3) // 2
+    assert sum(parts.values()) &lt; 0.4 * 494_032_768 * 4
 </code></pre></div>
 <p>실행:</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch25 -q
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch37 -q
 </code></pre></div>
-<p>실제 실행 결과(교재 검증 환경, <code>pretrain_tiny.py</code> 실행 후):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>.....                                                                    [100%]
-5 passed in 3.72s
+<p>실제 실행 결과(교재 검증 환경, CPU 경로):</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>....                                                                     [100%]
+4 passed in 9.37s
 </code></pre></div>
 <table>
 <thead>
@@ -997,55 +895,50 @@ def test_recorded_history():
 </thead>
 <tbody>
 <tr>
-  <td>짧은 학습</td>
-  <td>규칙이 있는 데이터에서 평가 손실이 1 이상 감소, NaN 없음</td>
+  <td>하드웨어 규칙</td>
+  <td>NF4는 CC 6.0 이상, LLM.int8은 CC 7.5 이상</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>Scheduler와 Clipping</td>
-  <td>마지막 학습률 0, 자르기 전 노름 기록</td>
+  <td>설정</td>
+  <td>NF4, 이중 양자화, FP32 계산</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>동결 존중</td>
-  <td>학습 제외로 표시한 가중치는 학습 후에도 그대로</td>
+  <td>4비트 Linear 계산</td>
+  <td>bitsandbytes 출력 = 제36장 직접 구현</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>저장·재로딩</td>
-  <td>다시 불러온 모델의 Logits가 완전히 같음</td>
+  <td>4비트 메모리</td>
+  <td>Embedding FP32 유지, 번호 바이트 = 원소 수 ÷ 2, 합계 FP32의 40% 미만</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>학습 기록</td>
-  <td>사전학습 시작 ≈ ln V, 최저 평가 손실 6 미만, 도메인 손실 1 이상 감소, 일반 손실 증가</td>
+  <td>버전 고정</td>
+  <td>CPU 경로 조합으로 전체 테스트 통과</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>0.5B Full FT</td>
-  <td>고정 메모리 7.36GiB &gt; 2GiB, 실행 불가 판정</td>
-  <td>통과</td>
-</tr>
-<tr>
-  <td>GT 1030 최대 VRAM</td>
-  <td>설계 예산 약 1.5GB 이하</td>
+  <td>GT 1030 로딩·VRAM</td>
+  <td>GPU에서 같은 결과, 최대 할당량이 예산 이내</td>
   <td>미검증</td>
 </tr>
 </tbody>
 </table>
-<p>GT 1030 최대 VRAM은 교재 검증 환경에 GPU가 없어 측정하지 못했습니다. 0.5B Full FT 판정은 계산으로 한 것입니다.</p>
-<p><strong>완료 기준:</strong> <code>PRE_STEPS</code>를 150으로 줄여 다시 학습하고 평가 손실이 가장 낮은 지점에서 멈췄을 때 Full FT 결과가 어떻게 달라지는지 기록하고, Full FT 학습률을 1e-3으로 올리면 망각이 커지는지 확인하며, 테스트 5개를 모두 통과하면 이 장을 마친 것입니다.</p>
-</section><section class="section" id="s09"><h2><span class="num">09</span>핵심 정리</h2><ul>
-<li>학습 루프는 순전파 → 손실 → 역전파(→ Accumulation) → Clipping → 갱신 → 초기화의 반복이며, 학습률·손실·Gradient 노름·평가 손실을 함께 기록합니다.</li>
-<li>무작위 Qwen2-Tiny는 300단계의 사전학습으로 평가 손실이 12에서 5.6까지 내려갔지만, 작은 데이터를 반복하면 곧 과적합이 옵니다. 평가 손실로 멈출 지점을 고릅니다.</li>
-<li>Hugging Face 형식으로 저장한 모델은 재로딩 후 출력이 완전히 같으며, 이후 PEFT·TRL·GGUF가 모두 이 폴더를 씁니다.</li>
-<li>Full Fine-tuning은 새 분야의 손실을 크게 줄이지만, 일반 능력의 일부를 잃는 망각을 함께 일으킵니다.</li>
-<li>0.5B 모델의 FP32 Full FT는 고정 메모리만 7.36GiB로 GT 1030에서 실행할 수 없습니다.</li>
+<p>GT 1030 경로는 교재 검증 환경에 GPU가 없어 실행하지 못했습니다. <code>requirements/gt1030.txt</code>의 버전은 CPU 경로에서 검증한 라이브러리 조합을 GT 1030용 PyTorch와 묶은 후보입니다.</p>
+<p><strong>완료 기준:</strong> <code>nf4_config()</code>의 <code>bnb_4bit_quant_type</code>을 <code>&quot;fp4&quot;</code>로 바꿔 PPL이 NF4보다 나쁜지 확인하고, <code>dtype=torch.float16</code>으로 불러올 때 4번의 Embedding 메모리가 절반이 되는지 확인하며(계산은 느려질 수 있음), 테스트 4개를 모두 통과하면 이 장을 마친 것입니다.</p>
+</section><section class="section" id="s07"><h2><span class="num">07</span>핵심 정리</h2><ul>
+<li><code>BitsAndBytesConfig</code>의 항목은 제36장의 NF4, 이중 양자화, 블록 크기, 계산 자료형에 하나씩 대응합니다.</li>
+<li>bitsandbytes의 NF4·8비트 Optimizer는 CC 6.0 이상(GT 1030 가능), LLM.int8은 CC 7.5 이상(GT 1030 불가)이 필요합니다. GPU가 없으면 CPU 경로로 같은 형식을 쓸 수 있습니다.</li>
+<li>저장(NF4), 계산(<code>bnb_4bit_compute_dtype</code>), 양자화하지 않는 계층(<code>dtype</code>)의 자료형은 따로 정합니다. GT 1030은 계산과 나머지 계층 모두 FP32입니다.</li>
+<li>4비트 Qwen2.5-0.5B의 파라미터 메모리는 약 696MiB이며, 그중 519MiB가 양자화하지 않는 Embedding입니다. PPL은 27.78로 직접 구현과 일치합니다.</li>
+<li>검증한 라이브러리 버전을 <code>requirements</code>에 고정했습니다. GT 1030 경로의 실제 실행은 미검증입니다.</li>
 </ul>
-<p><strong>다음 장 연결:</strong> 제26장에서는 가중치의 일부를 얼리고 나머지만 학습하는 부분 학습을 다룹니다. Qwen2-Tiny의 마지막 Block만 학습해 학습 가능 파라미터와 메모리가 얼마나 줄어드는지, 망각은 어떻게 달라지는지 Full FT와 비교합니다.</p>
+<p><strong>다음 장 연결:</strong> 4비트 모델을 불러왔으니 그 위에 LoRA를 붙여 학습하면 QLoRA입니다. 제38장에서는 QLoRA 학습에 필요한 메모리를 가중치·Activation·Gradient·Optimizer·Logits로 분해해 계산하고, Gradient Checkpointing으로 메모리를 줄이는 원리를 측정합니다.</p>
 </section><div class="chapter-links" id="chapter-links"></div></main></div>
 <footer class="footer">LLM 파인튜닝 및 로컬 AI 구현 · v01  · 실습 결과는 실제 환경에서 검증</footer>
-<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v02.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v01.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v01.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v01.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v01.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v01.html"}]};</script><script>/*
+<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v03.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v02.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v02.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v02.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v02.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v02.html"}]};</script><script>/*
  * 교육용 HTML 공통 동작 — 유지보수용 원본 (STANDARD 4·10.3·10.4)
  * 페이지 본문은 바꾸지 않고 탐색·이전/다음·모바일 메뉴·코드 복사만 덧붙인다.
  * 입력: 페이지의 window.COURSE (tools/guide/build_guides.py가 실제 존재하는 장만 넣음),

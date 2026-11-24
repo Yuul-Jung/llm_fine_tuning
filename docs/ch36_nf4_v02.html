@@ -757,7 +757,9 @@ def main() -&gt; None:
     rows = {&quot;INT4 Group 64&quot;: dequant_int4(*quant_int4(w, 64), 64),
             &quot;NF4 블록 64&quot;: nf4_fake(w), &quot;NF4 블록 64 + 이중 양자화&quot;: nf4_fake(w, dq=True)}
     for label, back in rows.items():
-        print(f&quot;  {label:&lt;26}상대 오차 {((back - w).norm() / w.norm()).item():.4f}&quot;)
+        e = back - w
+        print(f&quot;  {label:&lt;26}상대 오차 {(e.norm() / w.norm()).item():.4f}, MSE {e.pow(2).mean().item():.2e}, &quot;
+              f&quot;최대 절대오차 {e.abs().max().item():.4f}&quot;)
     try:
         import bitsandbytes.functional as bF
         q, st = bF.quantize_4bit(w.contiguous(), blocksize=BLOCK, quant_type=&quot;nf4&quot;, compress_statistics=False)
@@ -796,9 +798,9 @@ if __name__ == &quot;__main__&quot;:
 
 ── 2. model.layers.0.self_attn.q_proj.weight: 블록 64, 같은 4비트 비교 ──
   블록 최댓값으로 나눈 값의 84%가 −0.5 ~ 0.5에 있다(이 구간의 단계: 균일 INT4 7개, NF4 10개)
-  INT4 Group 64             상대 오차 0.1239
-  NF4 블록 64                 상대 오차 0.0968
-  NF4 블록 64 + 이중 양자화        상대 오차 0.0970
+  INT4 Group 64             상대 오차 0.1239, MSE 6.84e-05, 최대 절대오차 0.0876
+  NF4 블록 64                 상대 오차 0.0968, MSE 4.17e-05, 최대 절대오차 0.1797
+  NF4 블록 64 + 이중 양자화        상대 오차 0.0970, MSE 4.19e-05, 최대 절대오차 0.1797
   bitsandbytes NF4(CPU)와 직접 구현의 최대 차이 1.8e-07
 
 ── 3. 가중치 하나당 평균 비트 ──
@@ -815,6 +817,7 @@ if __name__ == &quot;__main__&quot;:
 <ul>
 <li><strong>1번</strong>에서 NF4의 16개 값은 0 근처에서 약 0.08~0.09 간격, 양 끝에서 0.28 간격입니다. 균일 INT4는 어디서나 0.143 간격입니다. 직접 계산한 표는 bitsandbytes의 표와 1.2e-7(FP32 반올림) 이내로 같습니다.</li>
 <li><strong>2번</strong>에서 값의 84%가 몰린 −0.5 ~ 0.5 구간에 균일 INT4는 7단계, NF4는 10단계를 둡니다. 그 결과 같은 블록 64, 같은 4비트에서 상대 오차가 12.4%에서 9.7%로 줄었습니다. 이중 양자화를 더해도 오차는 거의 그대로(9.70%)입니다. 직접 구현의 복원값은 bitsandbytes의 CPU 구현과 1.8e-7 이내로 같습니다.</li>
+<li>그런데 <strong>최대 절대오차</strong>는 반대입니다. NF4는 0.1797로 균일 INT4(0.0876)의 두 배입니다. NF4는 양 끝의 간격이 넓어(0.7230과 1.0 사이 0.277) 블록 안의 큰 값을 거칠게 담기 때문입니다. 값이 몰린 가운데를 촘촘히 하는 대가로 드문 큰 값의 최악 오차가 커졌습니다. 평균(MSE)은 6.84e-5에서 4.17e-5로 39% 줄었으므로, 전체로는 NF4가 유리합니다. 제35장에서 말한 &quot;평균과 최악을 함께 봐야 한다&quot;가 정확히 이 경우입니다.</li>
 <li><strong>3번</strong>에서 NF4 + 이중 양자화는 가중치 하나당 4.127비트입니다. FP32의 약 13%입니다.</li>
 <li><strong>4번</strong>이 이 장의 결론입니다. 모델 전체 PPL이 균일 INT4 Group 64의 35.43에서 NF4의 27.86으로 크게 좋아졌습니다. 제35장의 FP32 기준 21.45, INT8 21.77과 비교하면 4비트의 비용이 여전히 있지만, 값의 배치만 바꿔 피해를 절반 가까이 줄였습니다. 이중 양자화(27.87)는 품질을 거의 잃지 않고 메타데이터를 4분의 1로 줄입니다.</li>
 </ul>
@@ -951,6 +954,11 @@ def test_roundtrip_shape():
   <td>통과</td>
 </tr>
 <tr>
+  <td>오차 비교표</td>
+  <td>같은 가중치의 상대 오차·MSE·최대 절대오차(실습 2번)</td>
+  <td>통과</td>
+</tr>
+<tr>
   <td>이중 양자화</td>
   <td>absmax 복원 오차 1% 미만, 평균 비트 4.5 → 4.127</td>
   <td>통과</td>
@@ -968,13 +976,13 @@ def test_roundtrip_shape():
 <li>가중치는 0 중심의 정규분포에 가깝습니다. NF4는 정규분포의 분위수에 16단계를 두어, 값이 몰린 0 근처를 촘촘하게 표현합니다.</li>
 <li>NF4는 Codebook 양자화입니다. 블록을 absmax로 [−1, 1]에 맞춘 뒤 16개 값 중 가장 가까운 것의 번호(4비트)를 저장합니다.</li>
 <li>블록 64개마다 absmax를 두고, 이중 양자화로 absmax까지 8비트로 줄이면 평균 4.127비트입니다.</li>
-<li>같은 4비트에서 NF4는 균일 INT4보다 가중치 오차(12.4% → 9.7%)와 모델 PPL(35.43 → 27.86)이 모두 좋습니다.</li>
+<li>같은 4비트에서 NF4는 균일 INT4보다 가중치의 평균 오차(상대 오차 12.4% → 9.7%, MSE 39% 감소)와 모델 PPL(35.43 → 27.86)이 좋습니다. 대신 양 끝이 거칠어 최대 절대오차는 두 배입니다.</li>
 <li>직접 구현한 NF4는 bitsandbytes의 표·복원값과 일치합니다.</li>
 </ul>
 <p><strong>다음 장 연결:</strong> 이 장은 CPU에서 NF4를 계산했습니다. QLoRA는 bitsandbytes의 GPU 커널로 4비트 가중치를 GPU 메모리에 올리고 계산합니다. 제37장에서는 bitsandbytes를 GT 1030 같은 오래된 GPU에서 쓸 때의 호환성(Compute Capability, CUDA 버전)과 CPU 대체 경로를 정리합니다.</p>
 </section><div class="chapter-links" id="chapter-links"></div></main></div>
 <footer class="footer">LLM 파인튜닝 및 로컬 AI 구현 · v01  · 실습 결과는 실제 환경에서 검증</footer>
-<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v02.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v01.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v01.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v01.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v01.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v01.html"}]};</script><script>/*
+<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v03.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v02.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v02.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v02.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v02.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v02.html"}]};</script><script>/*
  * 교육용 HTML 공통 동작 — 유지보수용 원본 (STANDARD 4·10.3·10.4)
  * 페이지 본문은 바꾸지 않고 탐색·이전/다음·모바일 메뉴·코드 복사만 덧붙인다.
  * 입력: 페이지의 window.COURSE (tools/guide/build_guides.py가 실제 존재하는 장만 넣음),

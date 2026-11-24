@@ -96,7 +96,9 @@ def main() -> None:
     rows = {"INT4 Group 64": dequant_int4(*quant_int4(w, 64), 64),
             "NF4 블록 64": nf4_fake(w), "NF4 블록 64 + 이중 양자화": nf4_fake(w, dq=True)}
     for label, back in rows.items():
-        print(f"  {label:<26}상대 오차 {((back - w).norm() / w.norm()).item():.4f}")
+        e = back - w
+        print(f"  {label:<26}상대 오차 {(e.norm() / w.norm()).item():.4f}, MSE {e.pow(2).mean().item():.2e}, "
+              f"최대 절대오차 {e.abs().max().item():.4f}")
     try:
         import bitsandbytes.functional as bF
         q, st = bF.quantize_4bit(w.contiguous(), blocksize=BLOCK, quant_type="nf4", compress_statistics=False)

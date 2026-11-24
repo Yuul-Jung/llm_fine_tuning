@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="비교 설계 → 비교 A: Qwen2-Tiny → 비교 B: Qwen2.5-0.5B → 하드웨어별 최적 선택"><title>제40장 · Full FT·LoRA·QLoRA 비교 · LLM 파인튜닝 및 로컬 AI 구현</title>
+<meta name="description" content="학습 준비 → GT 1030 메모리 설정 → 최소 학습 루프 → 동결 검증과 Adapter 저장 → CPU 경로"><title>제39장 · QLoRA 최소 학습 · LLM 파인튜닝 및 로컬 AI 구현</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>/*
@@ -576,11 +576,11 @@ pre code {
     height: auto;
   }
 }
-</style></head><body data-chapter="ch40">
+</style></head><body data-chapter="ch39">
 <button type="button" class="mobile-menu" id="mobile-menu" aria-controls="course-nav" aria-expanded="false">☰ 장·목차</button><div class="shade" id="shade"></div>
-<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 40</p><h1>제40장 · Full FT·LoRA·QLoRA 비교</h1><p>비교 설계 → 비교 A: Qwen2-Tiny → 비교 B: Qwen2.5-0.5B → 하드웨어별 최적 선택</p><div class="chips"><span class="chip">Full FT</span><span class="chip">LoRA</span><span class="chip">QLoRA</span><span class="chip">메모리</span><span class="chip">비교 실험</span><span class="chip">하드웨어 선택</span></div></div></header>
-<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제3·4부에서 세 가지 학습 방식을 모두 해 보았습니다. 모든 가중치를 학습하는 Full Fine-tuning(제25장), 원본을 얼리고 작은 행렬만 학습하는 LoRA(제29·30장), 원본을 4비트로 줄인 위에서 LoRA를 학습하는 QLoRA(제39장)입니다. 각 장의 결과는 서로 다른 조건에서 얻은 것이라 그대로 비교할 수 없습니다.</p>
-<p>이 장은 제4부를 마무리하며, 세 방식을 <strong>같은 조건으로 맞춰 한 표로 비교</strong>합니다. 비교 A는 작은 Qwen2-Tiny에서 세 방식을 모두, 비교 B는 실제 Qwen2.5-0.5B에서 QLoRA와 FP32 LoRA를 비교합니다. 그리고 결과를 바탕으로, 주어진 장비에서 어떤 방식을 고를지 판단 기준을 세웁니다.</p>
+<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 39</p><h1>제39장 · QLoRA 최소 학습</h1><p>학습 준비 → GT 1030 메모리 설정 → 최소 학습 루프 → 동결 검증과 Adapter 저장 → CPU 경로</p><div class="chips"><span class="chip">QLoRA</span><span class="chip">4비트</span><span class="chip">LoRA</span><span class="chip">Gradient Checkpointing</span><span class="chip">Adapter</span><span class="chip">CPU 경로</span></div></div></header>
+<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제36~38장에서 QLoRA의 재료를 모두 확인했습니다. NF4 4비트 원본(제36·37장), 그 위의 LoRA와 학습 메모리 계산(제38장)입니다. 이 장에서는 마침내 Qwen2.5-0.5B-Instruct를 <strong>QLoRA로 학습</strong>합니다. 제3부의 고정 학습 데이터로 30단계를 학습하고, 학습 전후의 PPL, 4비트 원본이 정말 그대로인지, 저장되는 것이 Adapter뿐인지를 확인합니다.</p>
+<p>이 교재의 기준 장치는 GT 1030입니다. 교재 검증 환경에는 GPU가 없어, bitsandbytes의 CPU 경로로 <strong>같은 QLoRA를 실제로</strong> 실행했습니다. 형식과 절차는 GPU 경로와 같고, 장치와 속도만 다릅니다. GPU 경로의 최대 VRAM은 학습자 장비에서 측정해 기록할 항목으로 남깁니다.</p>
 <table>
 <thead>
 <tr>
@@ -591,366 +591,302 @@ pre code {
 <tbody>
 <tr>
   <td>핵심 질문</td>
-  <td>같은 조건에서 Full FT·LoRA·QLoRA는 메모리·저장 용량·품질이 어떻게 다르며, 장비에 따라 무엇을 골라야 하는가</td>
+  <td>4비트 0.5B 모델을 LoRA로 학습하면 실제로 배우는가, 원본은 정말 그대로인가</td>
 </tr>
 <tr>
   <td>실습 결과물</td>
-  <td>비교 조건 기록, 비교 A(Qwen2-Tiny 세 방식)·비교 B(0.5B QLoRA·LoRA) 결과표, 장비별 선택 기준</td>
+  <td>QLoRA 준비 과정, 학습 기록과 PPL 변화, 4비트 원본 동결 확인, Adapter 파일</td>
 </tr>
 <tr>
   <td>실습 파일</td>
-  <td><code>examples/ch40/</code>의 <code>compare_methods.py</code>, <code>test_ch40.py</code>, <code>results.json</code></td>
+  <td><code>examples/ch39/</code>의 <code>qlora_train.py</code>, <code>test_ch39.py</code></td>
 </tr>
 <tr>
   <td>선수 장</td>
-  <td>제25장(Full FT), 제29·30장(LoRA), 제37~39장(4비트, QLoRA)</td>
+  <td>제25장(학습 루프), 제30장(PEFT), 제37장(4비트 로딩), 제38장(QLoRA 메모리)</td>
 </tr>
 </tbody>
 </table>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>비교 A  Qwen2-Tiny(사전학습, 제25장) × 자전거 정비 데이터 × 60단계 → Full FT / LoRA / QLoRA
-비교 B  Qwen2.5-0.5B-Instruct × 고정 학습 데이터(시퀀스 256) × 30단계 → QLoRA / FP32 LoRA
-기록    학습 파라미터 · 고정 메모리 · Activation · 저장 용량 · PPL
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>4비트 로딩(NF4, 이중 양자화, FP32 계산)
+  → prepare_model_for_kbit_training(Checkpointing 준비)
+  → LoRA(q·v_proj, r 8, α 16)
+  → 제25장 train()(Batch 1 × Accumulation 4, 시퀀스 256)
+  → 동결 확인 → Adapter 저장(약 2MB)
 </code></pre></div>
-</section><section class="section" id="s01"><h2><span class="num">01</span>비교 설계</h2><p>공정한 비교의 원칙은 제21장에서 세웠습니다. <strong>바꾸는 조건 하나를 빼고 모두 같게</strong> 합니다. 이 장에서 바꾸는 것은 학습 방식 하나이고, 나머지는 다음과 같이 고정합니다.</p>
+</section><section class="section" id="s01"><h2><span class="num">01</span>학습 준비</h2><p>준비 순서에는 이유가 있습니다.</p>
 <table>
 <thead>
 <tr>
-  <th>조건</th>
-  <th>고정한 값</th>
+  <th>순서</th>
+  <th>하는 일</th>
+  <th>순서가 바뀌면</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>출발 체크포인트</td>
-  <td>비교 A: <code>models/qwen2-tiny-pretrained</code>(제25장), 비교 B: Qwen2.5-0.5B-Instruct(Revision 고정)</td>
+  <td>① 4비트 로딩</td>
+  <td>Linear 168개를 NF4로, Embedding·RMSNorm은 FP32로 불러온다(제37장)</td>
+  <td>—</td>
 </tr>
 <tr>
-  <td>데이터</td>
-  <td>데이터 지문으로 확인(실습 출력의 비교 조건)</td>
+  <td>② kbit 학습 준비</td>
+  <td>입력 Gradient를 켜고 Checkpointing을 준비한다(제38장)</td>
+  <td>이 함수는 모든 파라미터를 동결하므로, LoRA를 먼저 붙이면 A·B까지 얼어 아무것도 학습되지 않는다</td>
 </tr>
 <tr>
-  <td>토크나이저·Label</td>
-  <td>Qwen2.5 토크나이저, 첫 토큰을 뺀 전체 토큰을 정답으로(제22장)</td>
-</tr>
-<tr>
-  <td>평가</td>
-  <td>128토큰 블록 독립 PPL(제22장)</td>
-</tr>
-<tr>
-  <td>학습 루프</td>
-  <td>제25장 <code>train()</code>, AdamW, Warmup + Cosine, Clipping 1.0, seed 0</td>
-</tr>
-<tr>
-  <td>LoRA</td>
-  <td>r 8, α 16, 같은 seed의 A 초기값</td>
+  <td>③ LoRA 부착</td>
+  <td>원본 전체를 동결하고 q·v_proj에 A·B를 붙인다(제30장)</td>
+  <td>—</td>
 </tr>
 </tbody>
 </table>
-<p>학습률만은 방식마다 다르게 둡니다. 제26·29장에서 확인했듯 학습 파라미터의 수가 크게 다르면 알맞은 학습률도 다르기 때문입니다. Full FT는 제25장의 3e-4, LoRA와 QLoRA는 2e-3(비교 A)과 제39장의 5e-4(비교 B)를 씁니다. 같은 학습률을 강요하면 한쪽에 불리한 비교가 됩니다. 대신 쓴 값을 결과와 함께 기록합니다.</p>
-<p>측정 항목은 다섯 가지입니다.</p>
+<p>이 세 단계는 제38장의 <code>build_qlora()</code>에 이미 들어 있으므로 그대로 씁니다. 학습 파라미터는 540,672개(전체의 0.11%), 원본 메모리는 약 696MiB입니다.</p>
+</section><section class="section" id="s02"><h2><span class="num">02</span>GT 1030 메모리 설정</h2><p>제38장의 메모리 분해를 바탕으로 GT 1030의 학습 설정을 정합니다.</p>
 <table>
 <thead>
 <tr>
-  <th>항목</th>
-  <th>뜻</th>
+  <th>설정</th>
+  <th>값</th>
+  <th>이유</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>학습 파라미터</td>
-  <td><code>requires_grad=True</code>인 파라미터 수</td>
+  <td>시퀀스 길이</td>
+  <td>256</td>
+  <td>Logits(256 × 151,936 × 4 = 148MiB)와 Activation이 시퀀스에 비례한다</td>
 </tr>
 <tr>
-  <td>고정 메모리</td>
-  <td>파라미터 메모리(4비트는 번호 + absmax) + 학습 파라미터 × 12바이트(Gradient + AdamW)</td>
+  <td>Batch</td>
+  <td>1</td>
+  <td>묶음이 2배면 Activation과 Logits도 2배</td>
 </tr>
 <tr>
-  <td>Activation</td>
-  <td>학습 한 단계에서 역전파용으로 새로 저장된 텐서(제38장 방식)</td>
+  <td>Accumulation</td>
+  <td>4</td>
+  <td>메모리는 묶음 1개분으로, 효과는 묶음 4개처럼(제24·25장)</td>
 </tr>
 <tr>
-  <td>저장 용량</td>
-  <td>학습 결과로 저장하는 파일(Full FT는 모델 전체, LoRA·QLoRA는 Adapter)</td>
+  <td>Gradient Checkpointing</td>
+  <td>켬</td>
+  <td>Activation을 602MiB에서 170MiB로(제38장)</td>
 </tr>
 <tr>
-  <td>PPL</td>
-  <td>학습 후 평가 PPL(비교 A는 도메인과 일반 두 가지)</td>
+  <td>계산 자료형</td>
+  <td>FP32</td>
+  <td>GT 1030은 FP16·BF16 연산이 느리거나 없다(제32장)</td>
 </tr>
 </tbody>
 </table>
-</section><section class="section" id="s02"><h2><span class="num">02</span>비교 A: Qwen2-Tiny</h2><p>비교 A는 세 방식을 모두 같은 모델에서 비교합니다. LoRA와 QLoRA는 일곱 Linear 전부에 붙입니다(제29장의 &quot;7종 전부&quot;). 4비트 Qwen2-Tiny는 제25장의 사전학습 모델을 <code>BitsAndBytesConfig</code>로 불러와 만듭니다.</p>
-<p>Qwen2-Tiny에는 특이한 점이 하나 있습니다. 파라미터의 93%가 Embedding입니다(제19장). bitsandbytes는 Linear만 4비트로 바꾸므로, Qwen2-Tiny에서는 4비트로 줄어드는 부분이 7%뿐입니다. 비교 A에서 QLoRA의 메모리 이득이 작게 나오는 것은 방식의 한계가 아니라 이 모델 구조 때문입니다. 비교 B가 필요한 이유입니다.</p>
-</section><section class="section" id="s03"><h2><span class="num">03</span>비교 B: Qwen2.5-0.5B</h2><p>비교 B는 실제 모델에서 QLoRA와 FP32 LoRA를 비교합니다. 둘 다 q·v_proj LoRA, 시퀀스 256, Batch 1 × Accumulation 4, Gradient Checkpointing으로 같고, 원본 가중치의 형식(NF4 대 FP32)만 다릅니다.</p>
-<p>설계서는 QLoRA를 GT 1030에서, FP32 LoRA를 CPU에서 실행하도록 했습니다. 0.5B의 FP32 원본은 약 1.9GB라 GT 1030에 학습 공간까지 올릴 수 없기 때문입니다. 그래서 두 방식은 장치가 달라 <strong>시간은 비교하지 않고</strong> 메모리와 품질만 비교합니다. 교재 검증 환경은 두 방식 모두 CPU에서 실행했습니다.</p>
-</section><section class="section" id="s04"><h2><span class="num">04</span>하드웨어별 최적 선택</h2><p>방식 선택은 &quot;어느 것이 가장 좋은가&quot;가 아니라 &quot;주어진 메모리에서 무엇이 가능하고, 그중 무엇이 가장 좋은가&quot;의 문제입니다. 이 장의 결과와 제24·38장의 메모리 계산으로 기준을 세웁니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>GT 1030(VRAM 2GB)
-  Qwen2-Tiny     Full FT 가능(고정 640MiB)
-  Qwen2.5-0.5B   QLoRA만 가능(고정 약 704MiB + 실행 환경)
-CPU(RAM 8GB 이상)
-  Qwen2-Tiny     모든 방식
-  Qwen2.5-0.5B   FP32 LoRA, QLoRA(bitsandbytes CPU 경로)
-                 Full FT(고정 7.4GiB)는 RAM 16GB 이상에서 가능하지만 매우 느림
-최신 GPU(VRAM 16GB 이상)
-  두 모델 모두   모든 방식, BF16 혼합 정밀도로 더 빠르게(제32장)
-</code></pre></div>
-<p>선택의 순서는 다음과 같습니다.</p>
-<ol>
-<li><strong>메모리로 거른다.</strong> 고정 메모리 + Activation + Logits + 실행 환경이 장비 메모리에 들어가는 방식만 남깁니다.</li>
-<li><strong>품질을 본다.</strong> 남은 방식 중 원본 정밀도가 높은 쪽(Full FT &gt; FP32 LoRA &gt; QLoRA)이 대체로 품질이 좋습니다. 이 장의 비교 B가 그 차이를 숫자로 보여 줍니다.</li>
-<li><strong>보관과 배포를 본다.</strong> 과제가 여러 개라면 Adapter 몇 MB씩만 보관하는 LoRA·QLoRA가 유리합니다. 추론 속도가 중요하면 학습 후 병합합니다(제29·30장).</li>
-</ol>
-</section><section class="section" id="s05"><h2><span class="num">05</span>핵심 실습</h2><p>파일명: <code>examples/ch40/compare_methods.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제40장 핵심 실습: Full FT·LoRA·QLoRA를 같은 조건으로 비교한다
+<p>고정 학습 데이터(3,289토큰)를 256토큰으로 자르면 블록 12개가 됩니다. 30단계 × 유효 묶음 4 = 120블록이므로 약 10 Epoch를 학습합니다. 평가는 제22장과 같은 조건(128토큰 블록 5개, 지문 <code>1d8635627d660631</code>)으로 해, 기준값과 비교할 수 있게 합니다.</p>
+</section><section class="section" id="s03"><h2><span class="num">03</span>최소 학습 루프</h2><p>학습은 제25장의 <code>train()</code>을 그대로 씁니다. <code>train()</code>은 <code>requires_grad=True</code>인 파라미터, 즉 LoRA의 A·B만 AdamW에 넘기고, Accumulation·Clipping·Warmup + Cosine을 적용합니다. 4비트 원본이든 Qwen2-Tiny든 같은 함수로 학습할 수 있는 것은, 학습 루프가 모델의 내부 형식을 몰라도 되도록 만들었기 때문입니다.</p>
+<p>학습률은 5e-4로 정했습니다. 제29장에서 본 것처럼 학습 파라미터가 적은 LoRA는 Full FT보다 큰 학습률이 필요합니다.</p>
+</section><section class="section" id="s04"><h2><span class="num">04</span>동결 검증과 Adapter 저장</h2><p>학습 후 확인할 것은 두 가지입니다.</p>
+<p>첫째, <strong>4비트 원본이 그대로인가</strong>입니다. 학습 전에 168개 Linear의 4비트 번호(uint8)와 absmax를 복사해 두고, 학습 후 하나하나 비트까지 비교합니다. 제26·29장에서 FP32 가중치로 한 확인을 4비트 형식에서 다시 하는 것입니다.</p>
+<p>둘째, <strong>저장되는 것이 Adapter뿐인가</strong>입니다. PEFT 모델의 <code>save_pretrained</code>는 <code>adapter_config.json</code>과 <code>adapter_model.safetensors</code>만 저장합니다(제30장). 0.5B 모델의 q·v LoRA는 540,672개 × 4바이트 ≈ 2.1MB입니다. 원본 4비트 모델은 공개 저장소에서 언제든 다시 받을 수 있으므로, 학습 결과로 보관할 것은 이 2MB뿐입니다.</p>
+</section><section class="section" id="s05"><h2><span class="num">05</span>CPU 경로</h2><p>GPU가 없을 때 QLoRA를 어떻게 할지는 bitsandbytes의 CPU 지원 여부에 달려 있습니다. 이 교재가 쓰는 bitsandbytes 0.50.2는 CPU에서 4비트 로딩·계산·역전파를 지원하므로, 교재 검증 환경은 <strong>실제 QLoRA</strong>를 CPU로 실행했습니다. CPU 지원이 없는 버전이나 환경이라면, 제35·36장의 가짜 양자화로 4비트 원본을 흉내 내고 제29장의 LoRA를 붙여 원리를 따라가는 방식(원리 모사)으로 대신합니다.</p>
+<p>CPU 경로에는 함정이 하나 있었습니다. bitsandbytes 0.50.2는 AVX512-BF16을 지원하는 CPU에서 <strong>평가 모드</strong>로 계산할 때, 4비트 가중치를 추론에 빠른 배치로 바꿔 저장합니다. 이 변환이 일어난 뒤에는 학습 모드의 역전파가 오류로 멈춥니다. 학습 전 PPL을 재는 순간(평가 모드) 변환이 일어나므로, 학습할 모델에서는 이 변환을 꺼 두었습니다(<code>keep_training_layout()</code>). GPU 경로와는 관계없는 CPU 경로만의 동작입니다. 이 변환 여부에 따라 계산 순서가 달라져, 학습 전 PPL은 제37장의 27.78과 조금 다른 27.90으로 나옵니다.</p>
+</section><section class="section" id="s06"><h2><span class="num">06</span>핵심 실습</h2><p>파일명: <code>examples/ch39/qlora_train.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제39장 핵심 실습: Qwen2.5-0.5B-Instruct QLoRA 최소 학습 — 학습 전후 PPL, 동결 확인, Adapter 저장
 #
-# 실행: python examples/ch40/compare_methods.py          (비교 A + 비교 B, 교재 검증 환경 CPU에서 약 15분)
-#       python examples/ch40/compare_methods.py --only-a  (비교 A만, 약 4분)
+# 실행: python examples/ch39/qlora_train.py
 #
-# 비교 A: 사전학습 Qwen2-Tiny(제25장) + 자전거 정비 데이터, 60단계
-# 비교 B: Qwen2.5-0.5B-Instruct + 고정 학습 데이터(시퀀스 256), 30단계 — QLoRA(제39장)와 FP32 LoRA
+# 설정(이 교재의 GT 1030 기준): NF4 + FP32 계산, 시퀀스 256, Batch 1, Accumulation 4, Checkpointing
+# GPU가 없으면 bitsandbytes CPU 경로로 같은 QLoRA를 실행한다(교재 검증 환경).
 
-import json
 import math
 import sys
-import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-for p in (HERE.parent, HERE.parent / &quot;ch22&quot;, HERE.parent / &quot;ch24&quot;, HERE.parent / &quot;ch25&quot;, HERE.parent / &quot;ch29&quot;,
-          HERE.parent / &quot;ch37&quot;, HERE.parent / &quot;ch38&quot;, HERE.parent / &quot;ch39&quot;):
+for p in (HERE.parent, HERE.parent / &quot;ch22&quot;, HERE.parent / &quot;ch24&quot;, HERE.parent / &quot;ch25&quot;,
+          HERE.parent / &quot;ch37&quot;, HERE.parent / &quot;ch38&quot;):
     sys.path.insert(0, str(p))
 
 import torch  # noqa: E402
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training  # noqa: E402
-from transformers import AutoModelForCausalLM  # noqa: E402
-from transformers.utils import logging  # noqa: E402
 
 from common.fixed_data import fingerprint, load_blocks  # noqa: E402
-from common.models import QWEN_ID, QWEN_REVISION  # noqa: E402
 from common.qwen import load_tokenizer  # noqa: E402
-from lora_linear import ALL_LINEAR  # noqa: E402                     (제29장)
-from load_4bit import memory_parts, nf4_config  # noqa: E402        (제37장)
-from qlora_memory import saved_bytes_of_step  # noqa: E402          (제38장)
-from qlora_train import keep_training_layout  # noqa: E402          (제39장)
-from trainer import eval_loss, train  # noqa: E402                  (제25장)
+from load_4bit import hardware  # noqa: E402             (제37장)
+from qlora_memory import build_qlora  # noqa: E402       (제38장)
+from trainer import eval_loss, train  # noqa: E402       (제25장)
 
-logging.disable_progress_bar()
-TINY = HERE.parents[1] / &quot;models&quot; / &quot;qwen2-tiny-pretrained&quot;
-MiB = 2 ** 20
+ADAPTER = HERE.parents[1] / &quot;models&quot; / &quot;qwen2.5-0.5b-qlora-fixed&quot;
+SEQ, STEPS, LR = 256, 30, 5e-4
 
 
-def lora(model, targets=ALL_LINEAR):
-    torch.manual_seed(0)                                         # A 초기값 고정
-    return get_peft_model(model, LoraConfig(r=8, lora_alpha=16, target_modules=list(targets),
-                                            lora_dropout=0.0, bias=&quot;none&quot;, task_type=&quot;CAUSAL_LM&quot;))
+def keep_training_layout(model) -&gt; int:
+    &quot;&quot;&quot;bitsandbytes 0.50 CPU 경로는 AVX512-BF16 CPU에서 평가 모드로 계산할 때 4비트 가중치를 추론 전용
+    배치로 바꾼다. 바뀐 뒤에는 학습이 실패하므로, 학습할 모델에서는 이 변환을 끈다(GPU 경로와는 무관).&quot;&quot;&quot;
+    n = 0
+    for m in model.modules():
+        if hasattr(m, &quot;support_avx512bf16_for_cpu&quot;):
+            m.support_avx512bf16_for_cpu = False
+            n += 1
+    return n
 
 
-def load(path_or_id, quant: bool, **kw):
-    q = {&quot;quantization_config&quot;: nf4_config(), &quot;device_map&quot;: &quot;cpu&quot;} if quant else {}
-    return AutoModelForCausalLM.from_pretrained(path_or_id, dtype=torch.float32, **q, **kw)
-
-
-def weight_bytes(model) -&gt; int:
-    &quot;&quot;&quot;파라미터 메모리(4비트는 번호 + absmax). LoRA 파라미터 포함.&quot;&quot;&quot;
-    return sum(memory_parts(model).values())
-
-
-def artifact_bytes(model) -&gt; int:
-    with tempfile.TemporaryDirectory() as d:
-        model.save_pretrained(d)
-        return sum(f.stat().st_size for f in Path(d).iterdir() if f.suffix == &quot;.safetensors&quot;)
-
-
-def run(label, model, data, ev, steps, lr, accum, batch, seq_probe) -&gt; dict:
-    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    act, _, _ = saved_bytes_of_step(model, seq_probe)            # 한 단계 저장 텐서(제38장)
-    model.zero_grad(set_to_none=True)
-    train(model, data, {}, steps=steps, batch=batch, accum=accum, lr=lr, warmup=5, log_every=steps)
-    res = {&quot;방식&quot;: label, &quot;학습 파라미터&quot;: trainable,
-           &quot;고정 메모리MiB&quot;: round((weight_bytes(model) + trainable * 12) / MiB, 1),  # + Gradient·AdamW
-           &quot;Activation MiB&quot;: round(act / MiB, 1), &quot;저장 MiB&quot;: round(artifact_bytes(model) / MiB, 2)}
-    for k, blocks in ev.items():
-        res[k] = round(math.exp(eval_loss(model, blocks, &quot;cpu&quot;)), 2)
-    return res
-
-
-def show(rows: list) -&gt; None:
-    keys = list(rows[0])
-    for k in keys:
-        print(f&quot;  {k:&lt;14}&quot; + &quot;&quot;.join(f&quot;{str(r[k]):&gt;16}&quot; for r in rows))
-
-
-def compare_a(tok) -&gt; list:
-    d = {s: load_blocks(tok, s) for s in (&quot;domain_train&quot;, &quot;domain_eval&quot;, &quot;eval&quot;)}
-    ev = {&quot;도메인 PPL&quot;: d[&quot;domain_eval&quot;], &quot;일반 PPL&quot;: d[&quot;eval&quot;]}
-    probe = d[&quot;domain_train&quot;][:1]
-    print(f&quot;── 비교 A: Qwen2-Tiny, 학습 {tuple(d['domain_train'].shape)}, 60단계, Batch 2 × Accumulation 2 ──&quot;)
-    base = load(TINY, quant=False)
-    print(&quot;  학습 전&quot; + &quot;&quot;.join(f&quot;  {k} {math.exp(eval_loss(base, b, 'cpu')):.2f}&quot; for k, b in ev.items()))
-    rows = [run(&quot;Full FT&quot;, load(TINY, False), d[&quot;domain_train&quot;], ev, 60, 3e-4, 2, 2, probe)]
-    rows.append(run(&quot;LoRA&quot;, lora(load(TINY, False)), d[&quot;domain_train&quot;], ev, 60, 2e-3, 2, 2, probe))
-    q = prepare_model_for_kbit_training(load(TINY, True), use_gradient_checkpointing=False)
-    q = lora(q)
-    keep_training_layout(q)
-    rows.append(run(&quot;QLoRA&quot;, q, d[&quot;domain_train&quot;], ev, 60, 2e-3, 2, 2, probe))
-    show(rows)
-    return rows
-
-
-def compare_b(tok) -&gt; list:
-    train_blocks = load_blocks(tok, &quot;train&quot;, seq_len=256)
-    ev = {&quot;평가 PPL&quot;: load_blocks(tok, &quot;eval&quot;)}
-    probe = train_blocks[:1]
-    print(f&quot;\n── 비교 B: Qwen2.5-0.5B-Instruct, 학습 {tuple(train_blocks.shape)}, 30단계, &quot;
-          f&quot;Batch 1 × Accumulation 4, Checkpointing, q·v LoRA ──&quot;)
-    rows = []
-    for label, quant in ((&quot;QLoRA(NF4)&quot;, True), (&quot;LoRA(FP32)&quot;, False)):
-        m = load(QWEN_ID, quant, revision=QWEN_REVISION)
-        m = prepare_model_for_kbit_training(m, use_gradient_checkpointing=True,
-                                            gradient_checkpointing_kwargs={&quot;use_reentrant&quot;: False}) if quant \
-            else m
-        if not quant:
-            m.gradient_checkpointing_enable(gradient_checkpointing_kwargs={&quot;use_reentrant&quot;: False})
-            m.enable_input_require_grads()
-        m = lora(m, (&quot;q_proj&quot;, &quot;v_proj&quot;))
-        if quant:
-            keep_training_layout(m)
-        rows.append(run(label, m, train_blocks, ev, 30, 5e-4, 4, 1, probe))
-        del m
-    show(rows)
-    return rows
+def frozen_4bit(model) -&gt; dict:
+    &quot;&quot;&quot;4비트 가중치(번호, uint8)와 absmax를 복사해 둔다.&quot;&quot;&quot;
+    out = {}
+    for name, p in model.named_parameters():
+        if p.dtype == torch.uint8:
+            out[name] = p.detach().clone()
+            out[name + &quot;.absmax&quot;] = p.quant_state.absmax.detach().clone()
+    return out
 
 
 def main() -&gt; None:
+    hw = hardware()
+    device = hw[&quot;device&quot;]
     tok = load_tokenizer()
-    print(&quot;── 비교 조건 ──&quot;)
-    print(f&quot;  토크나이저 Qwen2.5(제08장), Label: 전체 토큰(첫 토큰 제외), 평가: 128토큰 블록 독립(제22장)&quot;)
-    print(f&quot;  데이터 지문 domain_train {fingerprint(load_blocks(tok, 'domain_train'))}, &quot;
-          f&quot;eval {fingerprint(load_blocks(tok, 'eval'))}&quot;)
-    print(f&quot;  LoRA r 8, α 16, seed 0, AdamW, Warmup + Cosine, Clipping 1.0(제25장 train())\n&quot;)
-    out = {&quot;A&quot;: compare_a(tok)}
-    if &quot;--only-a&quot; not in sys.argv:
-        out[&quot;B&quot;] = compare_b(tok)
-    (HERE / &quot;results.json&quot;).write_text(json.dumps(out, ensure_ascii=False, indent=1) + &quot;\n&quot;, encoding=&quot;utf-8&quot;)
+    train_blocks = load_blocks(tok, &quot;train&quot;, seq_len=SEQ)
+    eval_blocks = load_blocks(tok, &quot;eval&quot;)                    # 평가는 제22장 기준(128토큰 블록)
+    print(f&quot;장치 {hw['name']}, 학습 블록 {tuple(train_blocks.shape)}, 평가 블록 {tuple(eval_blocks.shape)} &quot;
+          f&quot;(지문 {fingerprint(eval_blocks)})\n&quot;)
+
+    print(&quot;── 1. 학습 준비: 4비트 로딩 → prepare_model_for_kbit_training → LoRA ──&quot;)
+    torch.manual_seed(0)
+    model, parts = build_qlora(device, checkpointing=True)
+    if device == &quot;cpu&quot;:
+        print(f&quot;  CPU 추론용 가중치 재배치 끔: Linear4bit {keep_training_layout(model)}개&quot;)
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f&quot;  학습 파라미터 {trainable:,}개, 원본 메모리 {sum(parts.values()) / 2**20:.1f}MiB&quot;)
+    before = frozen_4bit(model)
+    ppl0 = math.exp(eval_loss(model, eval_blocks, device))
+    print(f&quot;  학습 전 PPL {ppl0:.2f}&quot;)
+
+    print(f&quot;\n── 2. 학습: Batch 1 × Accumulation 4, {STEPS}단계, lr {LR:.0e}, Warmup 3 ──&quot;)
+    if device == &quot;cuda&quot;:
+        torch.cuda.reset_peak_memory_stats()
+    t0 = time.perf_counter()
+    hist = train(model, train_blocks, {&quot;평가&quot;: eval_blocks}, steps=STEPS, batch=1, accum=4, lr=LR,
+                 warmup=3, device=device, log_every=10)
+    for r in hist:
+        print(f&quot;  단계 {r['step']:&gt;3}  학습 {r['train']:.3f}  Grad노름 {r['grad_norm']:.2f}  &quot;
+              f&quot;평가 {r['평가']:.3f}(PPL {math.exp(r['평가']):.2f})&quot;)
+    print(f&quot;  걸린 시간 {time.perf_counter() - t0:.0f}초(환경마다 다름)&quot;)
+    if device == &quot;cuda&quot;:
+        print(f&quot;  GPU 최대 할당 {torch.cuda.max_memory_allocated() / 2**20:.0f}MiB&quot;)
+
+    print(&quot;\n── 3. 동결 검증과 Adapter 저장 ──&quot;)
+    after = frozen_4bit(model)
+    same = all(torch.equal(before[k], after[k]) for k in before)
+    print(f&quot;  4비트 원본(번호 {sum(1 for k in before if not k.endswith('absmax'))}개 텐서 + absmax) 그대로: {same}&quot;)
+    model.save_pretrained(ADAPTER)
+    files = {f.name: f.stat().st_size for f in sorted(ADAPTER.iterdir()) if f.suffix in (&quot;.json&quot;, &quot;.safetensors&quot;)}
+    print(f&quot;  저장 {files}&quot;)
+    print(f&quot;  PPL {ppl0:.2f} → {math.exp(hist[-1]['평가']):.2f}&quot;)
 
 
 if __name__ == &quot;__main__&quot;:
     main()
 </code></pre></div>
-<p>실행(교재 검증 환경의 CPU에서 비교 A 약 4분, 비교 B 약 12분):</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch40/compare_methods.py
+<p>실행(교재 검증 환경의 CPU에서 약 7분):</p>
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch39/qlora_train.py
 </code></pre></div>
-<p>실제 실행 결과(교재 검증 환경, CPU 경로):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 비교 조건 ──
-  토크나이저 Qwen2.5(제08장), Label: 전체 토큰(첫 토큰 제외), 평가: 128토큰 블록 독립(제22장)
-  데이터 지문 domain_train b70de1090c3f6e6c, eval 1d8635627d660631
-  LoRA r 8, α 16, seed 0, AdamW, Warmup + Cosine, Clipping 1.0(제25장 train())
+<p>실제 실행 결과(교재 검증 환경, CPU 경로, bitsandbytes 0.50.2):</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>장치 CPU, 학습 블록 (12, 256), 평가 블록 (5, 128) (지문 1d8635627d660631)
 
-── 비교 A: Qwen2-Tiny, 학습 (8, 128), 60단계, Batch 2 × Accumulation 2 ──
-  학습 전  도메인 PPL 884.91  일반 PPL 342.81
-  방식                     Full FT            LoRA           QLoRA
-  학습 파라미터               41914112          151552          151552
-  고정 메모리MiB                639.6           162.2           152.2
-  Activation MiB            84.9            83.6            83.6
-  저장 MiB                  159.89            0.58            0.58
-  도메인 PPL                 156.95          376.67           387.0
-  일반 PPL                  399.16          396.04          409.63
+── 1. 학습 준비: 4비트 로딩 → prepare_model_for_kbit_training → LoRA ──
+  CPU 추론용 가중치 재배치 끔: Linear4bit 168개
+  학습 파라미터 540,672개, 원본 메모리 695.6MiB
+  학습 전 PPL 27.90
 
-── 비교 B: Qwen2.5-0.5B-Instruct, 학습 (12, 256), 30단계, Batch 1 × Accumulation 4, Checkpointing, q·v LoRA ──
-  방식                  QLoRA(NF4)      LoRA(FP32)
-  학습 파라미터                 540672          540672
-  고정 메모리MiB                704.2          1892.8
-  Activation MiB           170.3           170.3
-  저장 MiB                    2.07            2.07
-  평가 PPL                   17.71           14.34
+── 2. 학습: Batch 1 × Accumulation 4, 30단계, lr 5e-04, Warmup 3 ──
+  단계   0  학습 nan  Grad노름 nan  평가 3.329(PPL 27.90)
+  단계  10  학습 2.675  Grad노름 1.59  평가 2.983(PPL 19.74)
+  단계  20  학습 2.487  Grad노름 1.62  평가 2.878(PPL 17.79)
+  단계  30  학습 2.105  Grad노름 1.69  평가 2.875(PPL 17.73)
+  걸린 시간 416초(환경마다 다름)
+
+── 3. 동결 검증과 Adapter 저장 ──
+  4비트 원본(번호 168개 텐서 + absmax) 그대로: True
+  저장 {'adapter_config.json': 1127, 'adapter_model.safetensors': 2175168}
+  PPL 27.90 → 17.73
 </code></pre></div>
-<p>결과는 <code>examples/ch40/results.json</code>에 저장됩니다.</p>
-<p><strong>비교 A 결과 읽기</strong></p>
+<p><strong>결과 읽기</strong></p>
 <ul>
-<li><strong>학습 파라미터와 메모리:</strong> LoRA·QLoRA는 Full FT의 0.36%(151,552개)만 학습합니다. 고정 메모리는 Full FT 640MiB에서 LoRA 162MiB로 4분의 1이 됩니다. Gradient와 AdamW 상태가 LoRA에만 붙기 때문입니다. QLoRA는 152MiB로 LoRA보다 10MiB밖에 줄지 않습니다. 앞 절에서 설명한 대로, 4비트로 줄어드는 Linear가 Qwen2-Tiny의 7%뿐이기 때문입니다.</li>
-<li><strong>Activation:</strong> 세 방식 모두 약 84MiB로 거의 같습니다. Activation은 모델의 계산 구조와 시퀀스 길이가 정하며, 학습 방식과는 거의 관계가 없습니다. 이것을 줄이는 것은 Gradient Checkpointing(제38장)입니다.</li>
-<li><strong>저장 용량:</strong> Full FT는 모델 전체 160MiB, LoRA·QLoRA는 Adapter 0.58MiB로 275분의 1입니다.</li>
-<li><strong>품질:</strong> 도메인 PPL은 Full FT가 157로 가장 많이 배웠고, LoRA 377, QLoRA 387이 뒤를 잇습니다. 학습 전 885에서 모두 크게 내려갔습니다. 일반 PPL(학습 전 343)은 세 방식 모두 396~410으로 올랐습니다. 이 설정에서는 LoRA도 Full FT만큼 망각을 일으켰습니다(제29장의 결론과 같음). 도메인 평가가 블록 1개라는 한계(제25장)도 기억해 둡니다.</li>
+<li><strong>1번</strong>에서 학습 파라미터는 540,672개, 원본 메모리는 695.6MiB로 제38장과 같습니다. CPU 경로이므로 추론용 재배치를 168개 Linear 모두에서 껐습니다.</li>
+<li><strong>2번</strong>에서 평가 PPL이 27.90에서 10단계 만에 19.74, 30단계에서 17.73으로 내려갔습니다. Grad노름은 1.6 안팎으로 안정적이고, 손실은 단계마다 꾸준히 줄었습니다. 4비트로 얼린 0.5B 모델이 LoRA 54만 개만으로 고정 데이터의 문장을 배웠습니다.</li>
+<li>17.73은 제22장의 FP32 Instruct(21.45)는 물론 Base(18.13)보다도 낮습니다. 그러나 이것을 &quot;모델이 전반적으로 좋아졌다&quot;로 읽으면 안 됩니다. 평가 문장은 학습 문장과 같은 주제를 다르게 쓴 것이라(제21장), 학습 데이터의 내용과 문체를 배우면 평가 PPL도 내려갑니다. 일반 능력을 잃지 않았는지는 다른 데이터로 따로 재야 하며, 제50장에서 다룹니다.</li>
+<li><strong>3번</strong>에서 168개 4비트 텐서와 absmax가 학습 전과 비트까지 같습니다. 저장된 Adapter는 약 2.1MB입니다.</li>
+<li>GT 1030 경로에서는 2번에 GPU 최대 할당량이 출력됩니다. 이 값이 설계 예산(약 1.5GB 내외) 안에 들어오는지가 GT 1030 QLoRA의 판정 기준입니다.</li>
 </ul>
-<p><strong>비교 B 결과 읽기</strong></p>
-<ul>
-<li><strong>메모리:</strong> 같은 LoRA라도 원본이 NF4면 고정 메모리가 704MiB, FP32면 1,893MiB입니다. QLoRA가 2.7배 작습니다. 0.5B 모델에서는 Linear가 파라미터의 72%를 차지하므로 4비트의 효과가 큽니다. Activation(170MiB)과 Adapter(2.07MiB)는 같습니다.</li>
-<li><strong>품질:</strong> 평가 PPL은 FP32 LoRA 14.34, QLoRA 17.71입니다. 두 방식 모두 학습 전 기준(FP32 21.45, NF4 27.90)보다 크게 좋아졌지만, FP32 LoRA가 더 낮습니다. QLoRA는 4비트로 바뀐 원본(PPL 27.90)에서 출발하므로, 같은 학습으로도 FP32 원본보다 불리한 자리에서 시작합니다. 메모리를 2.7배 아낀 대가입니다.</li>
-<li>QLoRA의 PPL은 제39장(17.73)과 조금 다른 17.71입니다. 이 장은 학습 전에 Activation을 재려고 순전파·역전파를 한 번 더 하므로, 계산 순서의 미세한 차이가 생깁니다.</li>
-</ul>
-<table>
-<thead>
-<tr>
-  <th>결론</th>
-  <th>근거</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>메모리가 넉넉하면 FP32 LoRA가 QLoRA보다 품질이 좋다</td>
-  <td>비교 B: 14.34 대 17.71</td>
-</tr>
-<tr>
-  <td>GT 1030에서 0.5B를 학습하는 유일한 방법은 QLoRA다</td>
-  <td>비교 B: FP32 원본만 1.9GB</td>
-</tr>
-<tr>
-  <td>작은 모델에서는 QLoRA의 이득이 작다</td>
-  <td>비교 A: Embedding이 대부분이라 4비트 효과 10MiB</td>
-</tr>
-<tr>
-  <td>학습 파라미터를 줄여도 망각은 남는다</td>
-  <td>비교 A: 세 방식 모두 일반 PPL 상승</td>
-</tr>
-</tbody>
-</table>
-</section><section class="section" id="s06"><h2><span class="num">06</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch40/test_ch40.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제40장 검증 테스트
+</section><section class="section" id="s07"><h2><span class="num">07</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch39/test_ch39.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제39장 검증 테스트
 #
-# 실행: python -m pytest examples/ch40 -q
+# 실행: python -m pytest examples/ch39 -q
+#
+# 0.5B QLoRA 학습(수 분)은 qlora_train.py로 실행하고, 테스트는 사전학습한 Qwen2-Tiny(제25장)를
+# 4비트로 불러와 같은 절차를 짧게 확인한다.
 
-import json
+import math
 import sys
 from pathlib import Path
 
 import pytest
+import torch
 
 HERE = Path(__file__).resolve().parent
-RESULTS = HERE / &quot;results.json&quot;
+for p in (HERE, HERE.parent, HERE.parent / &quot;ch22&quot;, HERE.parent / &quot;ch24&quot;, HERE.parent / &quot;ch25&quot;,
+          HERE.parent / &quot;ch37&quot;, HERE.parent / &quot;ch38&quot;):
+    sys.path.insert(0, str(p))
+
+pytest.importorskip(&quot;peft&quot;)
+pytest.importorskip(&quot;bitsandbytes&quot;)
+
+from qlora_train import frozen_4bit, keep_training_layout  # noqa: E402
+
+TINY = HERE.parents[1] / &quot;models&quot; / &quot;qwen2-tiny-pretrained&quot;
 
 
-@pytest.fixture(scope=&quot;module&quot;)
-def results():
-    if not RESULTS.exists():
-        pytest.skip(&quot;compare_methods.py를 먼저 실행&quot;)
-    return json.loads(RESULTS.read_text(encoding=&quot;utf-8&quot;))
+@pytest.fixture()
+def tiny_qlora():
+    if not TINY.exists():
+        pytest.skip(&quot;제25장 pretrain_tiny.py를 먼저 실행&quot;)
+    from load_4bit import nf4_config
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from transformers import AutoModelForCausalLM
+    m = AutoModelForCausalLM.from_pretrained(TINY, quantization_config=nf4_config(), dtype=torch.float32,
+                                             device_map=&quot;cpu&quot;)
+    m = prepare_model_for_kbit_training(m, use_gradient_checkpointing=True,
+                                        gradient_checkpointing_kwargs={&quot;use_reentrant&quot;: False})
+    torch.manual_seed(0)
+    m = get_peft_model(m, LoraConfig(r=8, lora_alpha=16, target_modules=[&quot;q_proj&quot;, &quot;v_proj&quot;],
+                                     lora_dropout=0.0, task_type=&quot;CAUSAL_LM&quot;))
+    keep_training_layout(m)
+    return m
 
 
-def test_comparison_a_table(results):
-    a = {r[&quot;방식&quot;]: r for r in results[&quot;A&quot;]}
-    assert a[&quot;Full FT&quot;][&quot;학습 파라미터&quot;] == 41_914_112
-    assert a[&quot;LoRA&quot;][&quot;학습 파라미터&quot;] == a[&quot;QLoRA&quot;][&quot;학습 파라미터&quot;] == 151_552   # 제29·30장
-    assert a[&quot;Full FT&quot;][&quot;고정 메모리MiB&quot;] &gt; 3 * a[&quot;LoRA&quot;][&quot;고정 메모리MiB&quot;]
-    assert a[&quot;QLoRA&quot;][&quot;고정 메모리MiB&quot;] &lt; a[&quot;LoRA&quot;][&quot;고정 메모리MiB&quot;]
-    assert a[&quot;Full FT&quot;][&quot;저장 MiB&quot;] &gt; 100 * a[&quot;LoRA&quot;][&quot;저장 MiB&quot;]
-    assert a[&quot;Full FT&quot;][&quot;도메인 PPL&quot;] &lt; a[&quot;LoRA&quot;][&quot;도메인 PPL&quot;] &lt; 884.9          # 모두 학습됨
+def test_qlora_steps_keep_4bit_frozen(tiny_qlora, tmp_path):
+    from trainer import eval_loss, train
+    ids = torch.randint(0, 5000, (4, 32))
+    before = frozen_4bit(tiny_qlora)
+    assert len(before) == 2 * 4 * 7                       # 4계층 × Linear 7종 × (번호, absmax)
+    l0 = eval_loss(tiny_qlora, ids, &quot;cpu&quot;)                 # 평가 모드를 거쳐도 학습이 가능해야 한다
+    train(tiny_qlora, ids, {}, steps=3, batch=1, accum=2, lr=1e-2, warmup=1, log_every=3)
+    after = frozen_4bit(tiny_qlora)
+    assert all(torch.equal(before[k], after[k]) for k in before)
+    assert math.isfinite(eval_loss(tiny_qlora, ids, &quot;cpu&quot;)) and math.isfinite(l0)
+    tiny_qlora.save_pretrained(tmp_path)
+    names = {f.name for f in tmp_path.iterdir()}
+    assert &quot;adapter_model.safetensors&quot; in names and &quot;model.safetensors&quot; not in names
+    assert (tmp_path / &quot;adapter_model.safetensors&quot;).stat().st_size &lt; 200_000   # LoRA 26,624개 × 4바이트 + 헤더
 
 
-def test_comparison_b_table(results):
-    if &quot;B&quot; not in results:
-        pytest.skip(&quot;비교 B를 실행하지 않음(--only-a)&quot;)
-    b = {r[&quot;방식&quot;]: r for r in results[&quot;B&quot;]}
-    assert b[&quot;QLoRA(NF4)&quot;][&quot;학습 파라미터&quot;] == b[&quot;LoRA(FP32)&quot;][&quot;학습 파라미터&quot;] == 540_672
-    assert b[&quot;QLoRA(NF4)&quot;][&quot;고정 메모리MiB&quot;] &lt; 0.5 * b[&quot;LoRA(FP32)&quot;][&quot;고정 메모리MiB&quot;]
-    for r in b.values():
-        assert r[&quot;평가 PPL&quot;] &lt; 21.45                                               # 제22장 기준보다 낮아짐
+def test_keep_training_layout_counts(tiny_qlora):
+    assert keep_training_layout(tiny_qlora) == 4 * 7
 </code></pre></div>
 <p>실행:</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch40 -q
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch39 -q
 </code></pre></div>
-<p>실제 실행 결과(교재 검증 환경, <code>compare_methods.py</code> 실행 후):</p>
+<p>실제 실행 결과(교재 검증 환경, 제25장 사전학습 모델이 있는 상태):</p>
 <div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>..                                                                       [100%]
-2 passed in 0.02s
+2 passed in 9.25s
 </code></pre></div>
+<p>테스트는 0.5B 대신 제25장의 사전학습 Qwen2-Tiny를 4비트로 불러와 같은 절차를 짧게 확인합니다.</p>
 <table>
 <thead>
 <tr>
@@ -961,39 +897,44 @@ def test_comparison_b_table(results):
 </thead>
 <tbody>
 <tr>
-  <td>비교 조건 기록</td>
-  <td>체크포인트·데이터 지문·Label·평가·학습 설정을 출력과 표로 기록</td>
+  <td>동결</td>
+  <td>학습 후 4비트 번호·absmax가 모두 학습 전과 같음</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>비교 A 표</td>
-  <td>학습 파라미터 수 일치, Full FT 메모리 &gt; LoRA의 3배, QLoRA &lt; LoRA, 모두 도메인 PPL 감소</td>
+  <td>평가 후 학습</td>
+  <td>평가 모드를 거친 뒤에도 학습이 진행됨(CPU 경로)</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>비교 B 표</td>
-  <td>학습 파라미터 540,672 동일, QLoRA 메모리 &lt; FP32 LoRA의 절반, 모두 기준 PPL보다 낮음</td>
+  <td>Adapter 저장</td>
+  <td>Adapter 파일만 저장되고 원본 가중치 파일은 없음</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>GT 1030 경로</td>
-  <td>QLoRA를 GPU에서 실행해 같은 표를 채움</td>
+  <td>PPL 감소</td>
+  <td>0.5B QLoRA에서 학습 후 평가 PPL 감소(실습 2번)</td>
+  <td>통과(27.90 → 17.73)</td>
+</tr>
+<tr>
+  <td>GT 1030 최대 VRAM</td>
+  <td>설계 예산 약 1.5GB 내외</td>
   <td>미검증</td>
 </tr>
 </tbody>
 </table>
-<p><strong>완료 기준:</strong> 비교 A의 LoRA 학습률을 5e-4로 낮춰 도메인·일반 PPL의 균형이 어떻게 바뀌는지 표에 한 줄로 더하고, 자신의 장비 메모리를 기준으로 04절의 선택 순서를 따라 0.5B 모델의 학습 방식을 골라 이유를 세 줄로 적으며, 테스트 2개를 모두 통과하면 이 장과 제4부를 마친 것입니다.</p>
-</section><section class="section" id="s07"><h2><span class="num">07</span>핵심 정리</h2><ul>
-<li>학습 방식을 비교할 때는 방식 하나만 바꾸고 체크포인트·데이터·Label·평가·학습 루프를 고정합니다. 학습률은 방식에 맞게 두되 기록합니다.</li>
-<li>고정 메모리는 Full FT ≫ LoRA &gt; QLoRA 순입니다. QLoRA의 이득은 Linear가 큰 모델에서 크고, Embedding이 대부분인 작은 모델에서는 작습니다.</li>
-<li>Activation은 학습 방식과 거의 무관하며, Gradient Checkpointing으로 줄입니다. 저장 용량은 Adapter가 모델 전체의 수백분의 1입니다.</li>
-<li>품질은 원본 정밀도가 높을수록 좋습니다(0.5B: FP32 LoRA 14.34 &lt; QLoRA 17.71). QLoRA는 메모리가 부족할 때 학습을 가능하게 하는 방법입니다.</li>
-<li>방식 선택은 메모리로 거르고, 품질을 보고, 보관·배포를 따지는 순서로 합니다.</li>
+<p><strong>완료 기준:</strong> <code>target_modules</code>를 7종 전부로 바꿔 학습하고 학습 파라미터·PPL·Adapter 크기를 q·v 결과와 표로 비교하며, GPU가 있다면 2번의 GPU 최대 할당량을 기록하고, 테스트 2개를 모두 통과하면 이 장을 마친 것입니다.</p>
+</section><section class="section" id="s08"><h2><span class="num">08</span>핵심 정리</h2><ul>
+<li>QLoRA는 4비트 로딩 → kbit 학습 준비 → LoRA 부착 순서로 준비하고, 제25장의 학습 루프로 그대로 학습합니다.</li>
+<li>GT 1030 기준 설정은 시퀀스 256, Batch 1, Accumulation 4, Gradient Checkpointing, FP32 계산입니다.</li>
+<li>교재 검증 환경(CPU 경로)에서 30단계 학습으로 평가 PPL이 27.90에서 17.73으로 내려갔고, 4비트 원본은 비트까지 그대로였습니다. 저장한 것은 약 2.1MB의 Adapter뿐입니다.</li>
+<li>평가 PPL의 감소는 학습 데이터와 같은 주제·문체를 배운 결과이며, 일반 능력의 유지는 별도로 확인해야 합니다.</li>
+<li>bitsandbytes CPU 경로에서는 평가 모드의 추론용 가중치 재배치를 꺼야 학습할 수 있습니다. GT 1030 경로의 실제 실행과 VRAM은 미검증입니다.</li>
 </ul>
-<p><strong>다음 장 연결:</strong> 제3·4부는 고정 데이터로 학습의 원리를 확인했습니다. 제5부에서는 실제 용도의 데이터로 옮겨 갑니다. 제41장에서는 지도 미세조정(SFT)이 무엇인지 정리하고, 질문과 답의 쌍으로 이루어진 사용자 데이터셋을 설계합니다.</p>
+<p><strong>다음 장 연결:</strong> 제25장(Full FT), 제29장(LoRA), 이 장(QLoRA)에서 세 가지 학습 방식을 모두 해 보았습니다. 제40장에서는 세 방식을 같은 체크포인트·데이터·평가 조건으로 맞춰 메모리와 품질을 한 표로 비교하고, 장비에 따라 어떤 방식을 고를지 정리하며 제4부를 마무리합니다.</p>
 </section><div class="chapter-links" id="chapter-links"></div></main></div>
 <footer class="footer">LLM 파인튜닝 및 로컬 AI 구현 · v01  · 실습 결과는 실제 환경에서 검증</footer>
-<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v02.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v01.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v01.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v01.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v01.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v01.html"}]};</script><script>/*
+<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v03.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v02.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v02.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v02.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v02.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v02.html"}]};</script><script>/*
  * 교육용 HTML 공통 동작 — 유지보수용 원본 (STANDARD 4·10.3·10.4)
  * 페이지 본문은 바꾸지 않고 탐색·이전/다음·모바일 메뉴·코드 복사만 덧붙인다.
  * 입력: 페이지의 window.COURSE (tools/guide/build_guides.py가 실제 존재하는 장만 넣음),

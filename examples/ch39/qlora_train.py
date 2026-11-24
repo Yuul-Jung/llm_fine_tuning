@@ -2,7 +2,7 @@
 #
 # 실행: python examples/ch39/qlora_train.py
 #
-# 설정(GT 1030 기준, 설계서 1.2절): NF4 + FP32 계산, 시퀀스 256, Batch 1, Accumulation 4, Checkpointing
+# 설정(이 교재의 GT 1030 기준): NF4 + FP32 계산, 시퀀스 256, Batch 1, Accumulation 4, Checkpointing
 # GPU가 없으면 bitsandbytes CPU 경로로 같은 QLoRA를 실행한다(교재 검증 환경).
 
 import math

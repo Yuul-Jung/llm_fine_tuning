@@ -397,7 +397,7 @@
       "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning",
       "subtitle": "학습 루프 → Scheduler, Accumulation, Clipping → 소규모 사전학습 → HF 형식 저장 → Full Fine-tuning → 0.5B 메모리 판정",
       "slug": "ch25_pretrain_full_ft",
-      "version": "v02",
+      "version": "v03",
       "source": "content/ch25.md",
       "tags": [
         "사전학습",
@@ -580,7 +580,7 @@
       "title": "NF4와 블록 단위 양자화",
       "subtitle": "가중치 분포와 NF4 → Codebook 양자화 → Block-wise와 Double Quantization → 저장 비용",
       "slug": "ch36_nf4",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch36.md",
       "tags": [
         "NF4",
@@ -596,7 +596,7 @@
       "title": "bitsandbytes와 GPU 호환성",
       "subtitle": "BitsAndBytesConfig → 하드웨어 조건 → Compute Dtype과 torch_dtype → 버전 조합 확정",
       "slug": "ch37_bitsandbytes",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch37.md",
       "tags": [
         "bitsandbytes",
@@ -612,7 +612,7 @@
       "title": "QLoRA 구조와 메모리 최적화",
       "subtitle": "QLoRA의 구성 → 학습 메모리 분해 → Gradient Checkpointing → Paged Optimizer",
       "slug": "ch38_qlora_memory",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch38.md",
       "tags": [
         "QLoRA",
@@ -628,7 +628,7 @@
       "title": "QLoRA 최소 학습",
       "subtitle": "학습 준비 → GT 1030 메모리 설정 → 최소 학습 루프 → 동결 검증과 Adapter 저장 → CPU 경로",
       "slug": "ch39_qlora_train",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch39.md",
       "tags": [
         "QLoRA",
@@ -645,7 +645,7 @@
       "title": "Full FT·LoRA·QLoRA 비교",
       "subtitle": "비교 설계 → 비교 A: Qwen2-Tiny → 비교 B: Qwen2.5-0.5B → 하드웨어별 최적 선택",
       "slug": "ch40_method_compare",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch40.md",
       "tags": [
         "Full FT",

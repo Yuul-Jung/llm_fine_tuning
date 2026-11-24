@@ -20,7 +20,7 @@ from common.qwen import load_tokenizer  # noqa: E402
 from load_4bit import hardware, load_nf4, memory_parts  # noqa: E402   (제37장)
 
 MiB = 2 ** 20
-SEQ = 256                                                   # GT 1030 QLoRA 기준 시퀀스(설계서 1.2절)
+SEQ = 256                                                   # GT 1030 QLoRA 기준 시퀀스(이 교재의 메모리 예산)
 
 
 def build_qlora(device: str, checkpointing: bool) -> tuple:
