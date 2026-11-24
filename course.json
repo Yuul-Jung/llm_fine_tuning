@@ -13,7 +13,29 @@
       "slug": "ch01_llm_overview_environment",
       "version": "v01",
       "source": "content/ch01.md",
-      "tags": ["LLM", "Ubuntu", "VS Code", "PyTorch", "Ollama"]
+      "tags": [
+        "LLM",
+        "Ubuntu",
+        "VS Code",
+        "PyTorch",
+        "Ollama"
+      ]
+    },
+    {
+      "id": "ch02",
+      "number": 2,
+      "title": "CPU·GPU 연산과 메모리 구조",
+      "subtitle": "CPU·GPU 구조 → 이론 성능 → 행렬곱 실측 → 모델 메모리 계산 → 가용 VRAM 측정",
+      "slug": "ch02_cpu_gpu_memory",
+      "version": "v01",
+      "source": "content/ch02.md",
+      "tags": [
+        "CPU",
+        "GPU",
+        "CUDA",
+        "VRAM",
+        "GFLOPS"
+      ]
     }
   ]
 }

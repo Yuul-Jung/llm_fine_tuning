@@ -9,6 +9,8 @@ dist/
 
 # 학습자 환경별 실행 결과
 examples/**/env_report.json
+examples/**/*.csv
+examples/**/*.png
 
 # 대용량 모델 가중치는 저장소와 분리
 *.safetensors
