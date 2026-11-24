@@ -1,0 +1,9 @@
+# GT 1030 2GB 경로 패키지 목록(Pascal, Compute Capability 6.1)
+# 설치: python -m pip install -r requirements/gt1030.txt
+# 조건: NVIDIA 드라이버 570 이상(nvidia-smi로 확인)
+# 근거: PyTorch 2.15부터 Pascal을 지원하던 CUDA 12.6 빌드 배포 종료 → 2.14 계열로 고정
+# 상태: 배포 파일(torch-2.14.0+cu126, Python 3.12) 존재 확인. GT 1030 실제 실행은 미검증(교재 검증 환경에 GPU 없음).
+
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.14.0+cu126
+pytest

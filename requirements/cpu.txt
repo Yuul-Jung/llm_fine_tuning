@@ -1,0 +1,7 @@
+# CPU 경로 패키지 목록
+# 설치: python -m pip install -r requirements/cpu.txt
+# 검증: 교재 검증 환경(Ubuntu 24.04, Python 3.13)에서 torch 2.15.0+cpu 설치·실행 확인
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0+cpu
+pytest

@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 빌드 중간 결과(배포본은 docs/)
+dist/
+
+# 학습자 환경별 실행 결과
+examples/**/env_report.json
+
+# 대용량 모델 가중치는 저장소와 분리
+*.safetensors
+*.gguf
+*.bin
+*.pt
+models/
+checkpoints/
