@@ -107,7 +107,7 @@
       "title": "자기회귀 언어 모델의 원리",
       "subtitle": "조건부 확률 → Logits·Softmax·선택 → Greedy Decoding → Bigram 모델 구현",
       "slug": "ch07_autoregressive_lm",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch07.md",
       "tags": [
         "언어 모델",
@@ -539,6 +539,23 @@
         "Zero Point",
         "Per-Channel",
         "Clipping"
+      ]
+    },
+    {
+      "id": "ch34",
+      "number": 34,
+      "title": "INT4와 Bit Packing",
+      "subtitle": "4비트 표현 범위 → Bit Packing → 부호 있는 4비트 복원 → 파일 생성과 FPGA 연계",
+      "slug": "ch34_int4_packing",
+      "version": "v01",
+      "source": "content/ch34.md",
+      "tags": [
+        "INT4",
+        "Bit Packing",
+        "부호 확장",
+        "Group 양자화",
+        "FPGA",
+        "BRAM"
       ]
     }
   ]
