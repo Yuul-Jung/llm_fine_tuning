@@ -196,6 +196,22 @@
         "Projection",
         "Forward Hook"
       ]
+    },
+    {
+      "id": "ch13",
+      "number": 13,
+      "title": "Scaled Dot-Product Attention",
+      "subtitle": "Attention Score → √dₖ Scaling → Softmax와 가중합 → 4×4 손계산과 세 방법 비교",
+      "slug": "ch13_scaled_dot_product_attention",
+      "version": "v01",
+      "source": "content/ch13.md",
+      "tags": [
+        "Attention",
+        "QKᵀ",
+        "Scaling",
+        "Softmax",
+        "가중합"
+      ]
     }
   ]
 }
