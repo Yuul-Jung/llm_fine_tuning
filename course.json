@@ -180,6 +180,22 @@
         "Residual",
         "Qwen"
       ]
+    },
+    {
+      "id": "ch12",
+      "number": 12,
+      "title": "Query·Key·Value 생성",
+      "subtitle": "Q·K·V의 역할 → 세 Projection과 차원 → QKV Bias → Hook으로 실제 모델과 비교",
+      "slug": "ch12_qkv_projection",
+      "version": "v01",
+      "source": "content/ch12.md",
+      "tags": [
+        "Query",
+        "Key",
+        "Value",
+        "Projection",
+        "Forward Hook"
+      ]
     }
   ]
 }
