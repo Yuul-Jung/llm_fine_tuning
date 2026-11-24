@@ -52,6 +52,22 @@
         "Transpose",
         "Multi-Head"
       ]
+    },
+    {
+      "id": "ch04",
+      "number": 4,
+      "title": "행렬 연산과 내적",
+      "subtitle": "내적 → 분산과 √d → 원소별 곱·행렬곱 → 차원 규칙 → Broadcasting·Batch → 반복문 구현",
+      "slug": "ch04_matrix_dot",
+      "version": "v01",
+      "source": "content/ch04.md",
+      "tags": [
+        "내적",
+        "행렬곱",
+        "분산",
+        "Broadcasting",
+        "Batch"
+      ]
     }
   ]
 }
