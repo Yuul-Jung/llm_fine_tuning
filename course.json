@@ -523,6 +523,23 @@
         "GradScaler",
         "Loss Scaling"
       ]
+    },
+    {
+      "id": "ch33",
+      "number": 33,
+      "title": "INT8 양자화 직접 구현",
+      "subtitle": "Scale과 Zero Point → 대칭, 비대칭 양자화 → Per-Tensor와 Per-Channel → Clipping과 Rounding",
+      "slug": "ch33_int8_quant",
+      "version": "v01",
+      "source": "content/ch33.md",
+      "tags": [
+        "INT8",
+        "양자화",
+        "Scale",
+        "Zero Point",
+        "Per-Channel",
+        "Clipping"
+      ]
     }
   ]
 }
