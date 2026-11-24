@@ -1,5 +1,20 @@
 # 변경 이력
 
+## 2026-11-24 (제3부)
+
+### 추가
+- 제3부 제21~30장 원고·실습 코드·검증 테스트(전체 테스트 205개)
+- 고정 데이터셋(`datasets/fixed/train.txt`, `eval.txt`)과 도메인 데이터셋(`domain_*.txt`), 출처 기록 `datasets/LICENSES.md`
+- 공통 모듈 `examples/common/fixed_data.py`, 공용 학습 루프 `examples/ch25/trainer.py`, 직접 구현 LoRA `examples/ch29/lora_linear.py`
+- 기준 PPL 기록 `examples/ch22/baseline_ppl.json`, 사전학습 기록 `examples/ch25/history.json`
+- requirements에 PEFT 추가(교재 검증 0.22.0)
+
+### 변경(제3부 적대적 검증 반영, `design/검증보고서_제3부.md`)
+- 제21장 v02: 파국적 망각을 처음 측정하는 장을 제25장으로 정정
+- 제25장 v02: 도메인 평가 데이터(블록 1개)의 해석 한계를 명시
+- 제28장 v02: 제29·30장 예고를 실제 구성에 맞게 정정, B = 0 예제의 난수 고정(재현성)
+- 제29장 v02: 작은 PPL 차이를 학습 효과로 해석하지 않도록 명시
+
 ## 2026-11-24 (제2부)
 
 ### 추가

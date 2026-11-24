@@ -55,6 +55,7 @@ def main() -> None:
     print(f"  병합 후 W' x {(x @ merged.T).tolist()}  같음: {torch.allclose(y, x @ merged.T)}")
 
     print("\n── 2. B = 0 초기화: 학습 첫 순간의 출력과 Gradient ──")
+    torch.manual_seed(0)                                # A의 난수를 고정해 결과를 재현한다
     a0 = torch.randn(1, 3, requires_grad=True)
     b0 = torch.zeros(2, 1, requires_grad=True)
     y0 = lora_forward(x, w, a0, b0, alpha, r)

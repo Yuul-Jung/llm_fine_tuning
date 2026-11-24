@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="사전학습과 전이학습 → Base와 Instruct → 프롬프트, RAG, 파인튜닝 → 실험용 고정 데이터셋"><title>제21장 · 사전학습·전이학습·파인튜닝 · LLM 파인튜닝 및 로컬 AI 구현</title>
+<meta name="description" content="학습 루프 → Scheduler, Accumulation, Clipping → 소규모 사전학습 → HF 형식 저장 → Full Fine-tuning → 0.5B 메모리 판정"><title>제25장 · Qwen2-Tiny 사전학습과 Full Fine-tuning · LLM 파인튜닝 및 로컬 AI 구현</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>/*
@@ -576,11 +576,11 @@ pre code {
     height: auto;
   }
 }
-</style></head><body data-chapter="ch21">
+</style></head><body data-chapter="ch25">
 <button type="button" class="mobile-menu" id="mobile-menu" aria-controls="course-nav" aria-expanded="false">☰ 장·목차</button><div class="shade" id="shade"></div>
-<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 21</p><h1>제21장 · 사전학습·전이학습·파인튜닝</h1><p>사전학습과 전이학습 → Base와 Instruct → 프롬프트, RAG, 파인튜닝 → 실험용 고정 데이터셋</p><div class="chips"><span class="chip">사전학습</span><span class="chip">전이학습</span><span class="chip">파인튜닝</span><span class="chip">Base Model</span><span class="chip">Instruct Model</span><span class="chip">RAG</span></div></div></header>
-<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제2부에서 우리는 모델이 <strong>어떻게 계산하는지</strong>를 부품 하나하나까지 확인했습니다. 그런데 그 계산에 쓰인 4억 9천만 개의 숫자, 가중치는 어디서 왔을까요? 제3부는 이 질문, 모델이 <strong>어떻게 배우는지</strong>를 다룹니다.</p>
-<p>이 장은 제3부의 출발점입니다. 오늘날 LLM이 만들어지는 두 단계, 사전학습과 파인튜닝의 관계를 정리하고, 같은 구조의 두 모델(Base와 Instruct)이 학습 단계에 따라 얼마나 다르게 행동하는지 직접 확인합니다. 그리고 앞으로 제3·4부의 모든 학습 실험에서 함께 쓸 <strong>고정 데이터셋</strong>을 준비합니다.</p>
+<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 25</p><h1>제25장 · Qwen2-Tiny 사전학습과 Full Fine-tuning</h1><p>학습 루프 → Scheduler, Accumulation, Clipping → 소규모 사전학습 → HF 형식 저장 → Full Fine-tuning → 0.5B 메모리 판정</p><div class="chips"><span class="chip">사전학습</span><span class="chip">Full Fine-tuning</span><span class="chip">학습 루프</span><span class="chip">과적합</span><span class="chip">파국적 망각</span><span class="chip">Checkpoint</span></div></div></header>
+<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제22~24장에서 학습의 재료를 모두 갖췄습니다. 손실을 재고(제22장), Gradient를 구하고(제23장), Optimizer로 가중치를 고칩니다(제24장). 이 장에서는 이 재료로 제19장의 <strong>무작위 Qwen2-Tiny를 처음부터 학습</strong>합니다. 아무것도 모르던 모델이 고정 데이터의 문장을 배워 가는 과정을 손실 곡선으로 지켜보고, 사전학습한 모델을 저장했다가 다시 불러 새로운 분야(자전거 정비)로 <strong>Full Fine-tuning</strong>합니다.</p>
+<p>이 장은 LLM이 만들어지는 두 단계(제21장)를 아주 작은 크기로 직접 재현하는 장입니다. 그리고 이 과정에서 학습의 대표적인 두 가지 함정, <strong>과적합</strong>과 <strong>망각</strong>을 숫자로 만납니다.</p>
 <table>
 <thead>
 <tr>
@@ -591,479 +591,402 @@ pre code {
 <tbody>
 <tr>
   <td>핵심 질문</td>
-  <td>사전학습된 모델에 무엇을 더 가르치는 것이 파인튜닝이며, 언제 필요한가</td>
+  <td>무작위 모델은 어떻게 언어를 배우며, 배운 모델을 새 분야에 맞추면 무엇을 얻고 잃는가</td>
 </tr>
 <tr>
   <td>실습 결과물</td>
-  <td>Base·Instruct 모델의 응답 비교표(재현 확인), 고정 토큰 데이터와 기준 지문</td>
+  <td>사전학습·Full FT 손실 기록과 곡선, 저장·재로딩 일치 확인, 학습 전후 PPL 비교, 메모리 측정</td>
 </tr>
 <tr>
   <td>실습 파일</td>
-  <td><code>examples/ch21/</code>의 <code>base_vs_instruct.py</code>, <code>fixed_dataset.py</code>, <code>test_ch21.py</code>, 공통 모듈 <code>examples/common/fixed_data.py</code></td>
+  <td><code>examples/ch25/</code>의 <code>trainer.py</code>, <code>pretrain_tiny.py</code>, <code>test_ch25.py</code>, 도메인 데이터 <code>datasets/fixed/domain_*.txt</code></td>
 </tr>
 <tr>
   <td>선수 장</td>
-  <td>제07장(다음 토큰 예측), 제20장(생성 설정과 Greedy)</td>
+  <td>제19장(Qwen2-Tiny), 제21장(고정 데이터), 제22~24장(손실·Gradient·Optimizer)</td>
 </tr>
 </tbody>
 </table>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>[사전학습]  방대한 글 → 다음 토큰 예측 → Base 모델(일반 지식, 이어 쓰기)
-   ↓ 가중치를 그대로 출발점으로
-[파인튜닝]  대화 예시 → 같은 다음 토큰 예측 → Instruct 모델(질문에 답하기)
-   ↓
-[이 교재]   고정 데이터 → 손실·기울기·최적화(제22~25장) → LoRA(제26~30장)
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>무작위 Qwen2-Tiny ──사전학습(고정 데이터)──▶ 저장 ──재로딩──▶ Full FT(자전거 정비) ──▶ 저장
+   손실 ≈ 12.0              손실 ≈ 5.6     같은 출력          도메인 PPL ↓, 일반 PPL ↑
 </code></pre></div>
-</section><section class="section" id="s01"><h2><span class="num">01</span>사전학습과 전이학습</h2><p><strong>사전학습</strong>(Pretraining)은 모델이 처음 태어나는 단계입니다. 무작위 숫자로 채운 모델(제19장의 Qwen2-Tiny처럼)에 방대한 글을 보여 주며 제07장의 과제, &quot;다음 토큰 맞히기&quot;를 반복시킵니다. Qwen2.5는 약 18조 개의 토큰으로 사전학습했습니다. 0.5B 모델의 파라미터 하나당 3만 개가 넘는 토큰을 본 셈입니다.</p>
-<p>다음 토큰을 잘 맞히려면 문법도, 사실도, 문장의 흐름도 알아야 합니다. 그래서 단순한 과제를 대규모로 반복하는 것만으로 모델 안에 언어와 세상에 대한 일반 지식이 쌓입니다. 이 단계에 드는 계산 자원은 개인이 감당할 수 있는 규모가 아닙니다.</p>
-<p><strong>전이학습</strong>(Transfer Learning)은 이렇게 얻은 가중치를 버리지 않고 새로운 과제의 출발점으로 다시 쓰는 생각입니다. 처음부터 배우는 대신, 이미 많이 아는 모델에 조금만 더 가르칩니다. 이 &quot;조금 더 가르치는&quot; 학습이 <strong>파인튜닝</strong>(Fine-tuning, 미세조정)입니다.</p>
-<table>
-<thead>
-<tr>
-  <th>구분</th>
-  <th>사전학습</th>
-  <th>파인튜닝</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>출발점</td>
-  <td>무작위 가중치</td>
-  <td>사전학습된 가중치</td>
-</tr>
-<tr>
-  <td>데이터</td>
-  <td>방대한 일반 글(조 단위 토큰)</td>
-  <td>목적에 맞는 적은 데이터</td>
-</tr>
-<tr>
-  <td>목표</td>
-  <td>일반적인 언어 능력</td>
-  <td>특정 형식·말투·과제</td>
-</tr>
-<tr>
-  <td>학습 원리</td>
-  <td>다음 토큰 예측</td>
-  <td>같다(다음 토큰 예측)</td>
-</tr>
-</tbody>
-</table>
-<p>마지막 줄이 중요합니다. 파인튜닝은 새로운 학습 방법이 아니라, <strong>같은 학습을 다른 데이터로 이어서 하는 것</strong>입니다. 그래서 제22~25장에서 익힐 손실·기울기·최적화는 사전학습과 파인튜닝 모두의 원리입니다.</p>
-</section><section class="section" id="s02"><h2><span class="num">02</span>Base Model과 Instruct Model</h2><p>Hugging Face에는 같은 이름에 <code>-Instruct</code>가 붙은 모델과 붙지 않은 모델이 나란히 있습니다.</p>
-<table>
-<thead>
-<tr>
-  <th>모델</th>
-  <th>학습 단계</th>
-  <th>행동</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>Qwen2.5-0.5B(Base)</td>
-  <td>사전학습까지</td>
-  <td>주어진 글을 그럴듯하게 <strong>이어 쓴다</strong></td>
-</tr>
-<tr>
-  <td>Qwen2.5-0.5B-Instruct</td>
-  <td>사전학습 + 사후 학습</td>
-  <td>질문에 <strong>답하고</strong>, 답이 끝나면 멈춘다</td>
-</tr>
-</tbody>
-</table>
-<p>두 모델은 구조, 계층 이름, 파라미터 수(494,032,768개)까지 완전히 같습니다. 다른 것은 가중치의 값뿐입니다. Instruct 모델은 Base 모델을 출발점으로 100만 개가 넘는 대화 예시로 지도 미세조정(SFT)을 하고, 사람이 선호하는 답에 가까워지도록 강화학습을 더한 모델입니다. 이 사후 학습이 바로 파인튜닝의 대표적인 예입니다.</p>
-<p>Instruct 모델이 배운 것 중 하나는 <strong>대화 형식</strong>(Chat Template)입니다. 질문은 사용자 칸에, 답은 어시스턴트 칸에 쓰고, 답이 끝나면 <code>&lt;|im_end|&gt;</code>를 내놓는 약속입니다. 이 형식으로 넣어야 Instruct 모델이 제대로 답합니다. 형식의 자세한 구조는 제44장에서 다룹니다.</p>
-</section><section class="section" id="s03"><h2><span class="num">03</span>프롬프트, RAG, 파인튜닝</h2><p>모델의 행동을 바꾸고 싶을 때 파인튜닝이 언제나 정답은 아닙니다. 바꾸고 싶은 것이 무엇인지에 따라 방법을 고릅니다.</p>
-<table>
-<thead>
-<tr>
-  <th>방법</th>
-  <th>바꾸는 것</th>
-  <th>가중치</th>
-  <th>잘 맞는 경우</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>프롬프트</td>
-  <td>입력 문장</td>
-  <td>그대로</td>
-  <td>지시를 분명히 하거나 예시를 보여 주면 되는 일</td>
-</tr>
-<tr>
-  <td>RAG</td>
-  <td>입력에 붙이는 참고 자료</td>
-  <td>그대로</td>
-  <td>최신 정보, 사내 문서처럼 <strong>지식</strong>이 필요한 일</td>
-</tr>
-<tr>
-  <td>파인튜닝</td>
-  <td>가중치</td>
-  <td>바뀜</td>
-  <td>일정한 <strong>형식·말투·행동</strong>을 몸에 배게 하는 일</td>
-</tr>
-</tbody>
-</table>
-<p>RAG(Retrieval-Augmented Generation, 검색 증강 생성)는 질문과 관련된 문서를 찾아 입력에 붙여 주는 방법입니다. 모델은 그 자료를 읽고 답하므로, 자료만 바꾸면 지식을 바로 갱신할 수 있습니다.</p>
-<p>파인튜닝에 대한 흔한 오해는 &quot;새 지식을 넣는 방법&quot;이라는 것입니다. 적은 데이터로 몇 번 학습해서는 사실을 정확히 외우게 하기 어렵고, 잘못하면 원래 알던 것을 잊습니다. 이것을 파국적 망각이라 하며, 제50장에서 측정합니다. 파인튜닝이 가장 잘하는 일은 <strong>어떻게 답하는가</strong>, 즉 형식과 행동을 바꾸는 것입니다. 핵심 실습의 결과에서도 이 구분이 드러납니다.</p>
-<p>이 교재가 고르는 기준은 간단합니다. 먼저 프롬프트로 해 보고, 지식이 부족하면 RAG를 붙이고, 그래도 형식이나 행동이 원하는 대로 되지 않을 때 파인튜닝을 합니다. 세 방법은 함께 쓸 수도 있습니다.</p>
-</section><section class="section" id="s04"><h2><span class="num">04</span>실험용 고정 데이터셋</h2><p>제3·4부에서는 같은 학습을 여러 방법으로 해 보고 결과를 비교합니다. Full Fine-tuning과 LoRA, FP32와 4비트 양자화, Rank 4와 Rank 16 같은 비교입니다. 공정하게 비교하려면 <strong>바꾸는 조건 하나를 빼고 나머지는 모두 같아야</strong> 합니다. 데이터가 그 첫 번째입니다.</p>
-<p>그래서 이 장에서 실험용 데이터를 한 번 만들어 고정합니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>datasets/fixed/train.txt, eval.txt     이 교재를 위해 새로 쓴 일반 상식 문장
-   │ Qwen2.5 토크나이저(제08~09장)
-   │ 문장마다 끝에 &lt;|endoftext|&gt;(ID 151643)
-   │ 하나로 이어 붙여 128토큰씩 자름(남는 꼬리는 버림)
-   ▼
-학습 블록 [25, 128], 평가 블록 [5, 128]   + 지문(16자리)
+</section><section class="section" id="s01"><h2><span class="num">01</span>학습 루프 구성</h2><p>학습은 같은 동작의 반복입니다. 이 장에서 그 반복을 <code>train()</code> 함수 하나로 만들어, 제26장 이후의 부분 학습과 LoRA 학습에서도 그대로 씁니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>한 단계:
+  ① 묶음 꺼내기       무작위로 블록 2개(Batch 2)
+  ② 순전파·손실       model(input_ids=x, labels=x).loss   (제22장의 한 칸 이동 포함)
+  ③ 역전파            loss.backward()                     (제23장)
+     (①~③을 accum번 반복해 Gradient를 더함)
+  ④ Clipping          Gradient 전체 노름을 1.0 이하로
+  ⑤ 갱신              optimizer.step(), scheduler.step()  (제24장)
+  ⑥ 초기화            optimizer.zero_grad()
 </code></pre></div>
+<p><code>train()</code>은 <code>requires_grad=True</code>인 파라미터만 Optimizer에 넘깁니다. 지금은 모든 파라미터가 대상이지만, 제26장에서 일부를 얼리면 같은 함수가 자동으로 나머지만 학습합니다.</p>
+<p>일정한 간격마다 학습률, 학습 손실, Gradient 노름, 평가 손실을 기록합니다. 학습이 잘 되는지는 이 기록으로만 판단할 수 있습니다. 평가 손실을 잴 때는 <code>model.eval()</code>과 <code>torch.no_grad()</code>로 학습 상태를 건드리지 않습니다.</p>
+</section><section class="section" id="s02"><h2><span class="num">02</span>Scheduler, Accumulation, Clipping 적용</h2><p>제24장에서 목적만 정리한 세 기법을 실제로 적용합니다.</p>
 <table>
 <thead>
 <tr>
-  <th>결정</th>
-  <th>이유</th>
+  <th>기법</th>
+  <th>이 장의 설정</th>
+  <th>기록에서 볼 곳</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>직접 쓴 문장</td>
-  <td>출처와 라이선스 문제가 없고(<code>datasets/LICENSES.md</code>), 누구나 같은 파일을 받는다</td>
+  <td>Warmup + Cosine</td>
+  <td>사전학습 Warmup 20단계, 최대 학습률 1e-3</td>
+  <td>학습률 열이 0에서 올랐다가 0으로 내려간다</td>
 </tr>
 <tr>
-  <td>학습과 평가 분리</td>
-  <td>평가 문장은 같은 주제를 다르게 쓴 문장이다. 외운 것이 아니라 배운 것인지 확인한다</td>
+  <td>Accumulation</td>
+  <td>Batch 2 × 2번 = 유효 묶음 4</td>
+  <td>메모리는 묶음 2개분만 쓴다</td>
 </tr>
 <tr>
-  <td>문장 끝 토큰</td>
-  <td>블록 안에서 문장이 어디서 끝나는지 모델이 알 수 있다</td>
-</tr>
-<tr>
-  <td>길이 128</td>
-  <td>GT 1030에서 FP32로 학습할 수 있는 길이(제25장)</td>
-</tr>
-<tr>
-  <td>지문</td>
-  <td>토큰이 하나라도 다르면 지문이 바뀐다. 실험 전에 같은 데이터인지 확인한다</td>
+  <td>Clipping</td>
+  <td>노름 1.0</td>
+  <td>Grad노름 열은 <strong>자르기 전</strong> 값이다</td>
 </tr>
 </tbody>
 </table>
-<p>데이터의 크기는 약 3,300토큰으로, Qwen2.5 사전학습의 약 55억분의 1입니다. 일부러 작게 만들었습니다. CPU에서 몇 분 안에 학습이 끝나야 원리를 여러 번 실험할 수 있기 때문입니다. 이 데이터는 원리 확인용이고, 실제 용도의 데이터는 제5부(제41장)에서 따로 설계합니다.</p>
-</section><section class="section" id="s05"><h2><span class="num">05</span>핵심 실습</h2><h3>실습 1. Base와 Instruct 비교</h3>
-<p>같은 질문 두 개를 Base와 Instruct 모델에 넣습니다. 입력은 평문 그대로와 대화 형식 두 가지로 넣고, 생성 설정은 Greedy로 고정합니다. 모든 조합을 두 번 실행해 결과가 같은지도 확인합니다.</p>
-<p>파일명: <code>examples/ch21/base_vs_instruct.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제21장 핵심 실습: 같은 구조의 Base 모델과 Instruct 모델에 같은 질문을 Greedy로 넣어 비교
+<p>Grad노름 열에 1.0보다 큰 값이 보이면, 그 단계에서 Clipping이 Gradient를 줄였다는 뜻입니다. 학습 초반이나 학습률이 높은 구간에서 크게 나타나고, 학습이 안정되면 작아집니다. Gradient 노름이 갑자기 수십, 수백으로 치솟거나 NaN이 되면 학습이 무너지는 신호이므로, <code>train()</code>은 NaN·Inf를 만나면 즉시 멈추게 했습니다.</p>
+</section><section class="section" id="s03"><h2><span class="num">03</span>소규모 사전학습</h2><p>설계서의 GT 1030 기준대로 FP32, 시퀀스 128, Batch 2로 학습합니다. 고정 학습 데이터는 블록 25개뿐이므로, 300단계 × 유효 묶음 4 = 1,200블록, 즉 약 48 Epoch을 학습합니다.</p>
+<p>이 규모는 진짜 사전학습과 비교하면 장난감입니다. Qwen2.5가 18조 토큰을 본 데 비해 우리는 3,300토큰을 48번 봅니다. 그래도 원리는 같습니다. 무작위 모델의 손실 12(어휘를 고르게 찍는 수준)가 내려가는 것은, 모델이 한국어 토큰의 분포와 문장 패턴을 배우고 있다는 뜻입니다.</p>
+<p>데이터가 작은 만큼 <strong>과적합</strong>이 빨리 옵니다. 학습 손실은 계속 내려가지만, 어느 순간부터 평가 손실은 다시 올라갑니다. 학습 데이터를 외우기 시작한 것입니다. 실제 학습에서는 평가 손실이 가장 낮았던 지점의 Checkpoint를 고르거나, 그 지점에서 학습을 멈춥니다(Early Stopping).</p>
+</section><section class="section" id="s04"><h2><span class="num">04</span>Hugging Face 형식 저장</h2><p>사전학습을 마친 모델은 제19장과 같은 Hugging Face 형식으로 저장합니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>models/qwen2-tiny-pretrained/
+  config.json            구조(hidden 256, 계층 4, …)
+  model.safetensors      가중치(공유 텐서는 한 번만)
+  generation_config.json 생성 기본값
+  tokenizer.json 등      Qwen2.5 토크나이저
+</code></pre></div>
+<p>이 폴더 하나가 이후 모든 도구의 입력이 됩니다. <code>from_pretrained</code>로 다시 부르면 Full FT를, PEFT(제30장)로 부르면 LoRA를, 제6부의 변환 도구로 부르면 GGUF를 만들 수 있습니다. 저장이 제대로 되었는지는 <strong>재로딩 전후의 출력이 비트 하나까지 같은지</strong>로 확인합니다.</p>
+</section><section class="section" id="s05"><h2><span class="num">05</span>Full Fine-tuning</h2><p>사전학습한 모델을 다시 불러 <strong>자전거 정비</strong> 분야의 문장(학습 8블록, 평가 1블록)으로 모든 가중치를 다시 학습합니다. 이것이 Full Fine-tuning입니다. 사전학습보다 작은 학습률(3e-4)과 짧은 학습(60단계)을 씁니다. 이미 배운 것을 크게 흔들지 않고 새 분야에 맞추기 위해서입니다. 도메인 평가 데이터는 블록 1개(예측 127개)뿐이므로, 도메인 PPL의 작은 차이는 우연일 수 있습니다. 이 장과 제26·29·30장에서는 크게 벌어지는 차이만 해석합니다.</p>
+<p>평가는 두 가지로 합니다. 새 분야를 배웠는지 보는 <strong>도메인 평가</strong>, 원래 알던 것을 잊지 않았는지 보는 <strong>일반 평가</strong>입니다. 파인튜닝은 언제나 이 두 숫자를 함께 봐야 합니다. 도메인 손실만 내려가고 일반 손실이 크게 오른다면, 모델은 새것을 배우는 대신 옛것을 잊은 것입니다. 이 현상을 <strong>파국적 망각</strong>(Catastrophic Forgetting)이라 합니다.</p>
+</section><section class="section" id="s06"><h2><span class="num">06</span>0.5B Full FT 메모리 계산</h2><p>Qwen2-Tiny의 Full FT는 가중치·Gradient·AdamW 상태를 합쳐 640MiB의 고정 메모리가 필요하고, 활성값을 더해도 설계 예산(GT 1030 VRAM 2GB 중 약 1.5GB)에 들어갑니다. 같은 계산을 Qwen2.5-0.5B에 적용하면 다음과 같습니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>가중치     494,032,768 × 4바이트 = 1.84GiB
+Gradient   494,032,768 × 4바이트 = 1.84GiB
+AdamW 상태 494,032,768 × 8바이트 = 3.68GiB
+───────────────────────────────────────────
+합계                               7.36GiB   + 활성값  &gt;  GT 1030 2GiB
+</code></pre></div>
+<p>가중치만으로 이미 2GiB에 가깝습니다. 0.5B 모델의 Full Fine-tuning은 GT 1030에서 <strong>실행 불가</strong>로 판정합니다. 메모리가 충분한 CPU에서는 가능하지만 매우 느립니다. 이 제약이 제26장부터 다루는 PEFT와 LoRA의 출발점입니다.</p>
+</section><section class="section" id="s07"><h2><span class="num">07</span>핵심 실습</h2><h3>학습 루프</h3>
+<p>파일명: <code>examples/ch25/trainer.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제25장: 제3·4부 학습 실습이 함께 쓰는 학습 루프
 #
-# 실행: python examples/ch21/base_vs_instruct.py
-#
-# Base 모델(Qwen2.5-0.5B)은 처음 실행할 때 약 1GB를 내려받는다. 두 모델 모두 Apache 2.0 라이선스.
+# 한 단계 = (묶음 accum개) × [순전파 → 손실 ÷ accum → 역전파]
+#           → Gradient Clipping → optimizer.step → scheduler.step → zero_grad
 
-import hashlib
+import math
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / &quot;ch24&quot;))
 
 import torch  # noqa: E402
-from transformers import AutoModelForCausalLM  # noqa: E402
-from transformers.utils import logging  # noqa: E402
 
-from common.qwen import load_model, load_tokenizer  # noqa: E402
-
-logging.disable_progress_bar()
-logging.set_verbosity_error()
-
-BASE_ID = &quot;Qwen/Qwen2.5-0.5B&quot;                                  # 대화 형식 학습 전
-BASE_REVISION = &quot;060db6499f32faf8b98477b0a26969ef7d8b9987&quot;
-QUESTIONS = [&quot;대한민국의 수도는 어디인가요?&quot;, &quot;물은 몇 도에서 끓나요?&quot;]
-NEW_TOKENS = 30
-
-
-def load_base(local_only: bool = False):
-    return AutoModelForCausalLM.from_pretrained(
-        BASE_ID, revision=BASE_REVISION, dtype=torch.float32,
-        local_files_only=local_only).eval()
-
-
-def as_chat(tok, question: str) -&gt; str:
-    &quot;&quot;&quot;Instruct 모델이 학습한 대화 형식(Chat Template)으로 감싼다. 자세한 구조는 제44장.&quot;&quot;&quot;
-    return tok.apply_chat_template([{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: question}],
-                                   tokenize=False, add_generation_prompt=True)
+from optim_memory import warmup_cosine  # noqa: E402  (제24장)
 
 
 @torch.no_grad()
-def greedy(model, tok, text: str, n: int = NEW_TOKENS) -&gt; str:
-    &quot;&quot;&quot;생성 설정을 모두 명시해 고정한다. generation_config.json의 무작위 추출·반복 벌점을 끈다.&quot;&quot;&quot;
-    ids = tok(text, return_tensors=&quot;pt&quot;).input_ids
-    out = model.generate(ids, max_new_tokens=n, do_sample=False, repetition_penalty=1.0,
-                         temperature=None, top_p=None, top_k=None,
-                         pad_token_id=tok.pad_token_id)
-    return tok.decode(out[0, ids.shape[1]:], skip_special_tokens=True)
+def eval_loss(model, blocks: torch.Tensor, device: str) -&gt; float:
+    &quot;&quot;&quot;블록마다 모델의 평균 손실을 구해 다시 평균(블록마다 유효 토큰 수가 같으므로 전체 평균과 같다)&quot;&quot;&quot;
+    was_training = model.training
+    model.eval()
+    losses = [model(input_ids=b.to(device), labels=b.to(device)).loss.item() for b in blocks.split(1)]
+    model.train(was_training)
+    return sum(losses) / len(losses)
 
 
-def run_all(models, tok) -&gt; dict:
-    results = {}
-    for q in QUESTIONS:
-        for form, text in ((&quot;평문&quot;, q), (&quot;대화 형식&quot;, as_chat(tok, q))):
-            for name, model in models.items():
-                results[(q, form, name)] = greedy(model, tok, text)
-    return results
+def train(model, train_blocks, eval_sets: dict, *, steps: int, batch: int = 2, accum: int = 2,
+          lr: float = 1e-3, warmup: int = 10, clip: float = 1.0, weight_decay: float = 0.1,
+          device: str = &quot;cpu&quot;, seed: int = 0, log_every: int = 25) -&gt; list:
+    &quot;&quot;&quot;학습 가능한(requires_grad=True) 파라미터만 AdamW로 학습하고 기록(list of dict)을 돌려준다.&quot;&quot;&quot;
+    torch.manual_seed(seed)
+    g = torch.Generator().manual_seed(seed)
+    model.to(device).train()
+    params = [p for p in model.parameters() if p.requires_grad]
+    opt = torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: warmup_cosine(s, warmup, steps))
 
+    def record(step, train_loss, grad_norm):
+        row = {&quot;step&quot;: step, &quot;lr&quot;: opt.param_groups[0][&quot;lr&quot;], &quot;train&quot;: train_loss, &quot;grad_norm&quot;: grad_norm}
+        for name, blocks in eval_sets.items():
+            row[name] = eval_loss(model, blocks, device)
+        return row
 
-def fingerprint(results: dict) -&gt; str:
-    joined = &quot;\n&quot;.join(f&quot;{k}|{v}&quot; for k, v in sorted(results.items()))
-    return hashlib.sha256(joined.encode()).hexdigest()[:16]
-
-
-def main() -&gt; None:
-    tok = load_tokenizer()                       # 두 모델은 같은 토크나이저(어휘)를 쓴다
-    models = {&quot;Base&quot;: load_base(), &quot;Instruct&quot;: load_model()}
-    print(f&quot;대화 형식 예: {as_chat(tok, QUESTIONS[0])!r}\n&quot;)
-
-    first = run_all(models, tok)
-    for (q, form, name), answer in first.items():
-        if name == &quot;Base&quot;:
-            print(f&quot;── 질문: {q} / 입력: {form} ──&quot;)
-        print(f&quot;  {name:&lt;9}{answer.strip()[:60]!r}&quot;)
-    second = run_all(models, tok)
-    print(f&quot;\n두 번 실행한 결과 동일: {first == second}  (지문 {fingerprint(first)})&quot;)
-
-
-if __name__ == &quot;__main__&quot;:
-    main()
+    history = [record(0, float(&quot;nan&quot;), float(&quot;nan&quot;))]
+    for step in range(1, steps + 1):
+        total = 0.0
+        for _ in range(accum):                                       # Gradient Accumulation
+            idx = torch.randint(0, len(train_blocks), (batch,), generator=g)
+            x = train_blocks[idx].to(device)
+            loss = model(input_ids=x, labels=x).loss / accum
+            loss.backward()
+            total += loss.item()
+        grad_norm = torch.nn.utils.clip_grad_norm_(params, clip).item()   # 자르기 전 노름
+        if not math.isfinite(grad_norm):
+            raise RuntimeError(f&quot;{step}단계에서 Gradient가 NaN·Inf&quot;)
+        opt.step()
+        sched.step()
+        opt.zero_grad(set_to_none=True)
+        if step % log_every == 0 or step == steps:
+            history.append(record(step, total, grad_norm))
+    model.eval()
+    return history
 </code></pre></div>
-<p>실행:</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch21/base_vs_instruct.py
-</code></pre></div>
-<p>실제 실행 결과(교재 검증 환경):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>대화 형식 예: '&lt;|im_start|&gt;system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.&lt;|im_end|&gt;\n&lt;|im_start|&gt;user\n대한민국의 수도는 어디인가요?&lt;|im_end|&gt;\n&lt;|im_start|&gt;assistant\n'
-
-── 질문: 대한민국의 수도는 어디인가요? / 입력: 평문 ──
-  Base     '- 2020년 11월 15일\n대한민국의 수도는 어디인가요?\n대한'
-  Instruct '대한민국의 수도는 서울입니다. 서울은 대한민국의 중심지로, 인구가 1000만 명에'
-── 질문: 대한민국의 수도는 어디인가요? / 입력: 대화 형식 ──
-  Base     '대한민국의 수도는 서울입니다.ContentLoaded\nContentLoaded\nContentLoaded\nCo'
-  Instruct '대한민국의 수도는 서울입니다.'
-── 질문: 물은 몇 도에서 끓나요? / 입력: 평문 ──
-  Base     '- 2019년 10월 15일\n2019년 10월 15일'
-  Instruct '- 2021년 12월 1일\n2021년 12월 1일\n물은'
-── 질문: 물은 몇 도에서 끓나요? / 입력: 대화 형식 ──
-  Base     '물은 몇 도에서 끓나요? Comey, 물은 몇 도에서 끓나요? Comey, 물은'
-  Instruct '물은 대부분 끓는 물질로 이루어져 있습니다. 물은 다양한 종류의 물질로 이루어져 있으며, 이들 중'
-
-두 번 실행한 결과 동일: True  (지문 c2fda4d3feb907c1)
-</code></pre></div>
-<p><strong>핵심 코드 풀이</strong></p>
-<ul>
-<li><code>greedy()</code>는 생성 설정을 하나도 빠짐없이 적습니다. Instruct 모델의 <code>generation_config.json</code>에는 무작위 추출과 반복 벌점 1.1이 기본값으로 들어 있으므로(제20장), 설정을 비워 두면 두 모델이 서로 다른 조건으로 생성하게 됩니다. 비교 실험에서는 조건을 코드에 명시하는 것이 원칙입니다.</li>
-<li><code>as_chat()</code>은 토크나이저에 들어 있는 대화 형식으로 질문을 감쌉니다. 출력 첫 줄에서 보듯 기본 시스템 문장, 사용자 칸, 어시스턴트 칸이 특수 토큰으로 구분됩니다.</li>
-<li>두 모델은 어휘가 같으므로 같은 토크나이저로 입력을 만듭니다. 입력 토큰이 완전히 같아야 응답 차이를 모델의 차이로 설명할 수 있습니다.</li>
-</ul>
-<p><strong>결과 읽기</strong></p>
-<table>
-<thead>
-<tr>
-  <th>관찰</th>
-  <th>해석</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>평문을 받은 Base는 날짜·질문을 반복한다</td>
-  <td>질문을 <strong>이어 쓸 글</strong>로 본다. 웹 게시판의 질문 글처럼 이어 간다</td>
-</tr>
-<tr>
-  <td>대화 형식을 받은 Instruct만 답하고 멈춘다</td>
-  <td>대화 형식과 대화 종료 토큰으로 끝내는 법을 사후 학습으로 배웠다</td>
-</tr>
-<tr>
-  <td>Base도 대화 형식에서는 &quot;서울입니다&quot;를 낸다</td>
-  <td>사실 지식은 사전학습에서 이미 생겼다. 다만 멈출 줄 몰라 엉뚱한 글이 이어진다</td>
-</tr>
-<tr>
-  <td>평문을 받은 Instruct는 질문에 따라 답하기도, 이어 쓰기도 한다</td>
-  <td>형식 밖의 입력에서는 사후 학습의 효과가 불안정하다</td>
-</tr>
-<tr>
-  <td>Instruct도 물의 끓는점은 틀린다</td>
-  <td>0.5B 모델의 지식은 한계가 있다. 답하는 <strong>형식</strong>은 맞지만 <strong>내용</strong>은 틀릴 수 있다</td>
-</tr>
-</tbody>
-</table>
-<p>마지막 두 줄이 03절의 구분을 그대로 보여 줍니다. 사후 학습(파인튜닝)은 모델에게 대화의 형식과 멈추는 법을 가르쳤지만, 모르는 사실을 알게 하지는 못했습니다. 끓는점 같은 지식이 필요하다면 RAG로 자료를 붙여 주는 편이 맞습니다.</p>
-<p>두 번 실행한 결과가 같으므로(<code>True</code>), 이 표는 언제 실행해도 다시 얻을 수 있습니다. 결과 전체의 지문(<code>c2fda4d3…</code>)이 같으면 내 컴퓨터에서도 같은 결과를 얻은 것입니다. 다만 CPU 종류나 라이브러리 버전에 따라 계산 순서가 달라지면, 점수가 비슷한 두 토큰의 순위가 바뀌어 문장 끝부분이 달라질 수도 있습니다.</p>
-<h3>실습 2. 고정 데이터셋과 지문</h3>
-<p>문장 파일을 토큰 블록으로 바꾸는 공통 모듈을 만들고, 기준 지문을 기록합니다. 제22장부터는 이 모듈의 <code>load_blocks()</code> 한 줄로 같은 데이터를 불러옵니다.</p>
-<p>파일명: <code>examples/common/fixed_data.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제3·4부의 모든 학습 비교 실험이 함께 쓰는 고정 토큰 데이터
+<h3>사전학습 → 저장 → 재로딩 → Full Fine-tuning</h3>
+<p>파일명: <code>examples/ch25/pretrain_tiny.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제25장 핵심 실습: Qwen2-Tiny 사전학습 → 저장 → 재로딩 → Full Fine-tuning
 #
-# 문장 파일(datasets/fixed/*.txt) → Qwen2.5 토크나이저 → 문장마다 끝에 &lt;|endoftext|&gt; →
-# 하나로 이어 붙임 → 길이 SEQ_LEN의 블록으로 자름(남는 꼬리는 버림)
-# 같은 파일·같은 토크나이저면 언제나 같은 토큰이 나오며, 지문(fingerprint)으로 확인한다.
-
-import hashlib
-from pathlib import Path
-
-import torch
-
-DATA_DIR = Path(__file__).resolve().parents[2] / &quot;datasets&quot; / &quot;fixed&quot;
-SEQ_LEN = 128                                   # GT 1030 기준 학습 시퀀스 길이(제25장)
-
-
-def read_lines(split: str) -&gt; list:
-    &quot;&quot;&quot;split: &quot;train&quot; 또는 &quot;eval&quot;. 빈 줄은 건너뛴다.&quot;&quot;&quot;
-    text = (DATA_DIR / f&quot;{split}.txt&quot;).read_text(encoding=&quot;utf-8&quot;)
-    return [line.strip() for line in text.splitlines() if line.strip()]
-
-
-def token_stream(tok, split: str) -&gt; list:
-    ids = []
-    for line in read_lines(split):
-        ids += tok(line).input_ids + [tok.convert_tokens_to_ids(&quot;&lt;|endoftext|&gt;&quot;)]
-    return ids
-
-
-def make_blocks(ids: list, seq_len: int = SEQ_LEN) -&gt; torch.Tensor:
-    n = len(ids) // seq_len
-    return torch.tensor(ids[: n * seq_len], dtype=torch.long).view(n, seq_len)
-
-
-def load_blocks(tok, split: str, seq_len: int = SEQ_LEN) -&gt; torch.Tensor:
-    &quot;&quot;&quot;[블록 수, seq_len] 정수 텐서&quot;&quot;&quot;
-    return make_blocks(token_stream(tok, split), seq_len)
-
-
-def fingerprint(blocks: torch.Tensor) -&gt; str:
-    &quot;&quot;&quot;토큰 값과 모양이 하나라도 다르면 달라지는 16자리 지문&quot;&quot;&quot;
-    data = str(tuple(blocks.shape)).encode() + blocks.numpy().astype(&quot;&lt;i8&quot;).tobytes()
-    return hashlib.sha256(data).hexdigest()[:16]
-</code></pre></div>
-<p>파일명: <code>examples/ch21/fixed_dataset.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제21장 실습 2: 제3·4부 비교 실험의 기준이 되는 고정 토큰 데이터 만들기와 지문 확인
+# 실행: python examples/ch25/pretrain_tiny.py
 #
-# 실행: python examples/ch21/fixed_dataset.py
+# 저장: models/qwen2-tiny-pretrained/, models/qwen2-tiny-bike/ (.gitignore로 커밋 제외)
+# 손실 곡선: examples/ch25/loss_curve.png (.gitignore로 커밋 제외)
 
+import json
+import math
+import resource
 import sys
+import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+HERE = Path(__file__).resolve().parent
+for p in (HERE, HERE.parent, HERE.parent / &quot;ch19&quot;, HERE.parent / &quot;ch24&quot;):
+    sys.path.insert(0, str(p))
 
-from common.fixed_data import SEQ_LEN, fingerprint, load_blocks, read_lines, token_stream  # noqa: E402
+import torch  # noqa: E402
+from transformers import Qwen2ForCausalLM  # noqa: E402
+from transformers.utils import logging  # noqa: E402
+
+from common.device import select_device  # noqa: E402
+from common.fixed_data import load_blocks  # noqa: E402
 from common.qwen import load_tokenizer  # noqa: E402
+from hf_compat import to_hf  # noqa: E402              (제19장)
+from optim_memory import full_ft_budget  # noqa: E402  (제24장)
+from tiny_model import Qwen2Tiny, init_weights  # noqa: E402
+from trainer import eval_loss, train  # noqa: E402
+
+logging.disable_progress_bar()
+MODELS = HERE.parents[1] / &quot;models&quot;
+PRE_STEPS, FT_STEPS = 300, 60
+
+
+def show(history: list, keys: tuple) -&gt; None:
+    print(&quot;  &quot; + f&quot;{'단계':&gt;5}{'학습률':&gt;9}{'학습':&gt;8}{'Grad노름':&gt;10}&quot; + &quot;&quot;.join(f&quot;{k:&gt;9}&quot; for k in keys))
+    for r in history:
+        print(&quot;  &quot; + f&quot;{r['step']:&gt;5}{r['lr']:&gt;9.1e}{r['train']:&gt;8.3f}{r['grad_norm']:&gt;10.2f}&quot;
+              + &quot;&quot;.join(f&quot;{r[k]:&gt;9.3f}&quot; for k in keys))
+
+
+def plot(pre: list, ft: list, path: Path) -&gt; None:
+    try:
+        import matplotlib
+        matplotlib.use(&quot;Agg&quot;)
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.plot([r[&quot;step&quot;] for r in pre], [r[&quot;일반평가&quot;] for r in pre], label=&quot;pretrain: eval&quot;)
+    ax.plot([r[&quot;step&quot;] for r in pre[1:]], [r[&quot;train&quot;] for r in pre[1:]], label=&quot;pretrain: train&quot;)
+    off = pre[-1][&quot;step&quot;]
+    ax.plot([off + r[&quot;step&quot;] for r in ft], [r[&quot;도메인평가&quot;] for r in ft], label=&quot;full FT: domain eval&quot;)
+    ax.plot([off + r[&quot;step&quot;] for r in ft], [r[&quot;일반평가&quot;] for r in ft], label=&quot;full FT: general eval&quot;)
+    ax.set_xlabel(&quot;step&quot;)
+    ax.set_ylabel(&quot;loss&quot;)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
 
 
 def main() -&gt; None:
+    device, _ = select_device()
     tok = load_tokenizer()
-    print(f&quot;── 1. 문장 파일 → 토큰 → 길이 {SEQ_LEN} 블록 ──&quot;)
-    for split in (&quot;train&quot;, &quot;eval&quot;):
-        lines = read_lines(split)
-        chars = sum(len(s) for s in lines)
-        ids = token_stream(tok, split)
-        blocks = load_blocks(tok, split)
-        print(f&quot;  {split:&lt;6}문장 {len(lines):&gt;3}개, 글자 {chars:&gt;5,}, 토큰 {len(ids):&gt;5,} &quot;
-              f&quot;(글자당 {len(ids) / chars:.2f}) → 블록 {tuple(blocks.shape)}, &quot;
-              f&quot;버린 꼬리 {len(ids) - blocks.numel()}&quot;)
+    data = {s: load_blocks(tok, s) for s in (&quot;train&quot;, &quot;eval&quot;, &quot;domain_train&quot;, &quot;domain_eval&quot;)}
+    print(f&quot;장치 {device}, 블록: &quot; + &quot;, &quot;.join(f&quot;{k} {tuple(v.shape)}&quot; for k, v in data.items()))
 
-    print(&quot;\n── 2. 첫 블록의 앞부분 ──&quot;)
-    first = load_blocks(tok, &quot;train&quot;)[0]
-    print(f&quot;  토큰 {first[:12].tolist()}&quot;)
-    print(f&quot;  복원 {tok.decode(first[:40])!r}&quot;)
+    model = to_hf(init_weights(Qwen2Tiny(), seed=0))
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f&quot;학습 가능 파라미터 {trainable:,}개(전체), FP32·AdamW 고정 메모리 &quot;
+          f&quot;{sum(full_ft_budget(trainable, 'AdamW').values()) / 2**20:.0f}MiB\n&quot;)
 
-    print(&quot;\n── 3. 지문(실험 비교의 기준값) ──&quot;)
-    for split in (&quot;train&quot;, &quot;eval&quot;):
-        a, b = load_blocks(tok, split), load_blocks(tok, split)
-        print(f&quot;  {split:&lt;6}{fingerprint(a)}  다시 만들어도 같음: {fingerprint(a) == fingerprint(b)}&quot;)
+    print(f&quot;── 1. 사전학습: Batch 2 × Accumulation 2 = 유효 4, {PRE_STEPS}단계, lr 1e-3, Warmup 20 ──&quot;)
+    t0 = time.perf_counter()
+    pre = train(model, data[&quot;train&quot;], {&quot;일반평가&quot;: data[&quot;eval&quot;]}, steps=PRE_STEPS,
+                lr=1e-3, warmup=20, device=device, log_every=50)
+    show(pre, (&quot;일반평가&quot;,))
+    print(f&quot;  걸린 시간 {time.perf_counter() - t0:.0f}초&quot;)
+
+    print(&quot;\n── 2. Hugging Face 형식 저장 → 재로딩 → 출력 비교 ──&quot;)
+    pre_dir = MODELS / &quot;qwen2-tiny-pretrained&quot;
+    model.save_pretrained(pre_dir)
+    tok.save_pretrained(pre_dir)
+    reloaded = Qwen2ForCausalLM.from_pretrained(pre_dir, dtype=torch.float32).to(device).eval()
+    probe = data[&quot;eval&quot;][:1].to(device)
+    with torch.no_grad():
+        same = torch.equal(model(probe).logits, reloaded(probe).logits)
+    print(f&quot;  저장 파일 {sorted(f.name for f in pre_dir.iterdir())}&quot;)
+    print(f&quot;  재로딩 전후 Logits 완전히 같음: {same}&quot;)
+
+    before = {k: eval_loss(reloaded, data[k], device) for k in (&quot;eval&quot;, &quot;domain_eval&quot;)}
+    print(f&quot;\n── 3. Full Fine-tuning(자전거 정비 도메인): {FT_STEPS}단계, lr 3e-4 ──&quot;)
+    ft = train(reloaded, data[&quot;domain_train&quot;], {&quot;도메인평가&quot;: data[&quot;domain_eval&quot;], &quot;일반평가&quot;: data[&quot;eval&quot;]},
+               steps=FT_STEPS, lr=3e-4, warmup=5, device=device, log_every=20)
+    show(ft, (&quot;도메인평가&quot;, &quot;일반평가&quot;))
+    after = {k: eval_loss(reloaded, data[k], device) for k in (&quot;eval&quot;, &quot;domain_eval&quot;)}
+    print(&quot;  PPL 비교       학습 전      학습 후&quot;)
+    for k, label in ((&quot;domain_eval&quot;, &quot;도메인 평가&quot;), (&quot;eval&quot;, &quot;일반 평가&quot;)):
+        print(f&quot;  {label:&lt;10}{math.exp(before[k]):&gt;10.1f}{math.exp(after[k]):&gt;12.1f}&quot;)
+    reloaded.save_pretrained(MODELS / &quot;qwen2-tiny-bike&quot;)
+    tok.save_pretrained(MODELS / &quot;qwen2-tiny-bike&quot;)
+
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024      # Linux: KiB → MiB
+    print(f&quot;\n── 4. 메모리: 프로세스 최대 RSS {peak:,.0f}MiB(CPU, 모델 두 벌·데이터·라이브러리 포함) ──&quot;)
+    if device == &quot;cuda&quot;:
+        print(f&quot;  GPU 최대 할당 {torch.cuda.max_memory_allocated() / 2**20:,.0f}MiB&quot;)
+    b = full_ft_budget(494_032_768, &quot;AdamW&quot;)
+    print(f&quot;  0.5B Full FT 고정 메모리 {sum(b.values()) / 2**30:.2f}GiB &gt; GT 1030 2GiB → 실행 불가&quot;)
+
+    plot(pre, ft, HERE / &quot;loss_curve.png&quot;)
+    (HERE / &quot;history.json&quot;).write_text(json.dumps({&quot;pretrain&quot;: pre, &quot;full_ft&quot;: ft}, ensure_ascii=False,
+                                                  indent=1), encoding=&quot;utf-8&quot;)
 
 
 if __name__ == &quot;__main__&quot;:
     main()
 </code></pre></div>
-<p>실행:</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch21/fixed_dataset.py
+<p>실행(교재 검증 환경의 2코어 CPU에서 약 8분):</p>
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch25/pretrain_tiny.py
 </code></pre></div>
 <p>실제 실행 결과(교재 검증 환경):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 1. 문장 파일 → 토큰 → 길이 128 블록 ──
-  train 문장  61개, 글자 4,390, 토큰 3,289 (글자당 0.75) → 블록 (25, 128), 버린 꼬리 89
-  eval  문장  18개, 글자   874, 토큰   642 (글자당 0.73) → 블록 (5, 128), 버린 꼬리 2
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>장치 cpu, 블록: train (25, 128), eval (5, 128), domain_train (8, 128), domain_eval (1, 128)
+학습 가능 파라미터 41,914,112개(전체), FP32·AdamW 고정 메모리 640MiB
 
-── 2. 첫 블록의 앞부분 ──
-  토큰 [144271, 12802, 73077, 32290, 37195, 106, 12802, 18585, 238, 126333, 40771, 116]
-  복원 '봄이 오면 낮이 점점 길어지고 기온이 오르면서 겨우내 얼어 있던 땅이 녹는다. 개나리'
+── 1. 사전학습: Batch 2 × Accumulation 2 = 유효 4, 300단계, lr 1e-3, Warmup 20 ──
+     단계      학습률      학습    Grad노름     일반평가
+      0  5.0e-05     nan       nan   11.990
+     50  9.7e-04   5.836      2.00    6.364
+    100  8.1e-04   4.585      5.20    5.973
+    150  5.6e-04   3.077      6.21    5.622
+    200  2.8e-04   1.979      5.17    5.705
+    250  7.7e-05   0.911      1.42    5.797
+    300  0.0e+00   0.567      0.63    5.837
+  걸린 시간 493초
 
-── 3. 지문(실험 비교의 기준값) ──
-  train 568b36495839b8b1  다시 만들어도 같음: True
-  eval  1d8635627d660631  다시 만들어도 같음: True
+── 2. Hugging Face 형식 저장 → 재로딩 → 출력 비교 ──
+  저장 파일 ['chat_template.jinja', 'config.json', 'generation_config.json', 'model.safetensors', 'tokenizer.json', 'tokenizer_config.json']
+  재로딩 전후 Logits 완전히 같음: True
+
+── 3. Full Fine-tuning(자전거 정비 도메인): 60단계, lr 3e-4 ──
+     단계      학습률      학습    Grad노름    도메인평가     일반평가
+      0  6.0e-05     nan       nan    6.785    5.837
+     20  2.5e-04   3.384      5.26    5.499    5.873
+     40  8.8e-05   2.091      1.77    5.144    5.975
+     60  0.0e+00   1.546      1.09    5.056    5.989
+  PPL 비교       학습 전      학습 후
+  도메인 평가         884.9       157.0
+  일반 평가          342.8       399.2
+
+── 4. 메모리: 프로세스 최대 RSS 1,743MiB(CPU, 모델 두 벌·데이터·라이브러리 포함) ──
+  0.5B Full FT 고정 메모리 7.36GiB &gt; GT 1030 2GiB → 실행 불가
 </code></pre></div>
+<p>손실 곡선은 <code>examples/ch25/loss_curve.png</code>로 저장됩니다. 걸린 시간과 메모리는 컴퓨터마다 다르며, 손실 값은 같은 장치·같은 라이브러리에서 다시 실행하면 같게 나옵니다.</p>
+<p><strong>결과 읽기</strong></p>
 <ul>
-<li>1번에서 한국어 문장은 글자당 약 0.75토큰으로 나뉩니다. 학습 문장 61개가 3,289토큰이 되어 128토큰 블록 25개를 만들고, 남는 89토큰은 버립니다. 평가 문장 18개는 블록 5개가 됩니다.</li>
-<li>2번에서 블록은 첫 문장부터 그대로 이어집니다. 블록의 경계는 문장 경계와 상관없이 128토큰마다 잘리므로, 한 블록 안에 문장 여러 개와 <code>&lt;|endoftext|&gt;</code>가 섞여 있습니다.</li>
-<li>3번의 지문이 이 데이터의 이름표입니다. 앞으로 학습 결과를 비교할 때는 먼저 지문이 <code>568b36495839b8b1</code>(학습), <code>1d8635627d660631</code>(평가)인지 확인합니다.</li>
+<li><strong>1번 사전학습</strong>에서 일반 평가 손실이 11.99에서 150단계의 5.62까지 내려갑니다. 무작위 모델이 고정 데이터의 문장 패턴을 배웠습니다. PPL로 보면 약 16만에서 약 280으로 줄었습니다.</li>
+<li>150단계 이후 학습 손실은 0.57까지 계속 내려가지만 평가 손실은 5.62 → 5.84로 다시 오릅니다. <strong>과적합</strong>입니다. 학습 손실만 봤다면 학습이 아주 잘 된 것으로 착각했을 것입니다.</li>
+<li>학습률 열이 처음 20단계 동안 올라갔다가 Cosine 곡선을 따라 0으로 내려가고, Grad노름은 학습 중반 5~6까지 커졌다가 학습률이 줄면서 1 아래로 내려갑니다. 노름이 1을 넘은 단계는 Clipping이 Gradient를 줄였습니다.</li>
+<li><strong>2번</strong>에서 저장한 모델을 다시 불러온 결과가 원래 모델과 비트 하나까지 같습니다. 이 폴더를 이후 장에서 그대로 씁니다.</li>
+<li><strong>3번 Full FT</strong>에서 도메인 평가 PPL이 884.9 → 157.0으로 크게 줄었습니다. 자전거 정비 문장의 표현을 배웠습니다. 그러나 일반 평가 PPL은 342.8 → 399.2로 올랐습니다. 60단계의 짧은 학습만으로도 원래 알던 것을 일부 잊었습니다. <strong>망각</strong>입니다.</li>
+<li><strong>4번</strong>의 최대 RSS는 CPU 프로세스 전체(모델 두 벌, 라이브러리 포함)의 값입니다. GT 1030 경로에서는 GPU 최대 할당량이 함께 출력되며, 이 값을 설계 예산(약 1.5GB 이하)과 비교합니다(교재 검증 환경 미검증).</li>
 </ul>
-</section><section class="section" id="s06"><h2><span class="num">06</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch21/test_ch21.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제21장 검증 테스트
+<p>이 결과에서 제3부의 다음 질문이 나옵니다. 모든 가중치를 바꾸지 않고, 일부만 학습하면 망각을 줄이면서 메모리도 아낄 수 있지 않을까요? 제26장에서 확인합니다.</p>
+</section><section class="section" id="s08"><h2><span class="num">08</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch25/test_ch25.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제25장 검증 테스트
 #
-# 실행: python -m pytest examples/ch21 -q
+# 실행: python -m pytest examples/ch25 -q
+#
+# 전체 학습(수 분)은 pretrain_tiny.py로 실행하고, 테스트는 짧은 학습과 저장된 기록을 확인한다.
 
+import json
+import math
 import sys
 from pathlib import Path
 
 import pytest
+import torch
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent))
+for p in (HERE, HERE.parent, HERE.parent / &quot;ch19&quot;, HERE.parent / &quot;ch24&quot;):
+    sys.path.insert(0, str(p))
 
-from common.fixed_data import SEQ_LEN, fingerprint, load_blocks, make_blocks, read_lines  # noqa: E402
-
-# 제21장에서 기록한 기준 지문. 데이터나 토크나이저가 바뀌면 이 테스트가 알려 준다.
-TRAIN_FP, EVAL_FP = &quot;568b36495839b8b1&quot;, &quot;1d8635627d660631&quot;
+from tiny_model import TINY, Qwen2Tiny, init_weights  # noqa: E402
+from trainer import eval_loss, train  # noqa: E402
 
 
-@pytest.fixture(scope=&quot;module&quot;)
-def tok():
-    try:
-        from common.qwen import load_tokenizer
-        return load_tokenizer(True)
-    except Exception:
-        pytest.skip(&quot;Qwen 토크나이저가 아직 내려받아지지 않음(fixed_dataset.py를 먼저 실행)&quot;)
+def small_tiny():
+    &quot;&quot;&quot;테스트용으로 계층 1개, 어휘 앞부분만 쓰는 축소판(같은 Qwen2 구조)&quot;&quot;&quot;
+    from transformers import Qwen2Config, Qwen2ForCausalLM
+    cfg = Qwen2Config(**{**TINY, &quot;num_hidden_layers&quot;: 1, &quot;vocab_size&quot;: 512}, tie_word_embeddings=True)
+    torch.manual_seed(0)
+    return Qwen2ForCausalLM(cfg)
 
 
-def test_make_blocks_drops_tail():
-    blocks = make_blocks(list(range(10)), seq_len=4)
-    assert blocks.tolist() == [[0, 1, 2, 3], [4, 5, 6, 7]]
+def test_short_training_reduces_loss():
+    torch.manual_seed(0)
+    blocks = torch.randint(0, 64, (6, 32))            # 어휘 64개만 쓰는 무작위 데이터
+    blocks[:, 1::2] = blocks[:, ::2] + 1                # 규칙: 짝수 위치 다음은 +1
+    model = small_tiny()
+    hist = train(model, blocks, {&quot;평가&quot;: blocks[:2]}, steps=40, batch=2, accum=2, lr=3e-3,
+                 warmup=5, log_every=20)
+    assert hist[-1][&quot;평가&quot;] &lt; hist[0][&quot;평가&quot;] - 1.0
+    assert all(math.isfinite(r[&quot;grad_norm&quot;]) for r in hist[1:])
 
 
-def test_eval_sentences_not_in_train():
-    assert not set(read_lines(&quot;eval&quot;)) &amp; set(read_lines(&quot;train&quot;))
+def test_scheduler_ends_at_zero_and_clipping_recorded():
+    blocks = torch.randint(0, 64, (4, 16))
+    hist = train(small_tiny(), blocks, {}, steps=10, warmup=2, log_every=5, clip=0.5)
+    assert hist[-1][&quot;lr&quot;] == pytest.approx(0.0, abs=1e-12)
+    assert hist[1][&quot;grad_norm&quot;] &gt; 0                     # 자르기 전 노름을 기록
 
 
-def test_fixed_blocks_and_fingerprint(tok):
-    train, ev = load_blocks(tok, &quot;train&quot;), load_blocks(tok, &quot;eval&quot;)
-    assert train.shape == (25, SEQ_LEN) and ev.shape == (5, SEQ_LEN)
-    assert fingerprint(train) == TRAIN_FP and fingerprint(ev) == EVAL_FP
+def test_frozen_parameters_are_not_trained():
+    model = small_tiny()
+    emb_before = model.model.embed_tokens.weight.detach().clone()
+    model.model.embed_tokens.weight.requires_grad_(False)
+    train(model, torch.randint(0, 64, (4, 16)), {}, steps=5, warmup=1, log_every=5)
+    assert torch.equal(model.model.embed_tokens.weight, emb_before)
 
 
-def test_sentences_end_with_endoftext(tok):
-    eot = tok.convert_tokens_to_ids(&quot;&lt;|endoftext|&gt;&quot;)
-    flat = load_blocks(tok, &quot;train&quot;).flatten().tolist()
-    assert eot == 151643 and flat.count(eot) &gt;= 25        # 블록마다 평균 두 문장 이상
+def test_save_reload_identical(tmp_path):
+    from transformers import Qwen2ForCausalLM
+    model = small_tiny().eval()
+    model.save_pretrained(tmp_path)
+    again = Qwen2ForCausalLM.from_pretrained(tmp_path, dtype=torch.float32).eval()
+    ids = torch.randint(0, 512, (1, 12))
+    with torch.no_grad():
+        assert torch.equal(model(ids).logits, again(ids).logits)
 
 
-def test_greedy_is_reproducible(tok):
-    try:
-        from base_vs_instruct import greedy, load_base
-        base = load_base(local_only=True)
-    except Exception:
-        pytest.skip(&quot;Base 모델이 아직 내려받아지지 않음(base_vs_instruct.py를 먼저 실행)&quot;)
-    a = greedy(base, tok, &quot;봄이 오면&quot;, n=8)
-    b = greedy(base, tok, &quot;봄이 오면&quot;, n=8)
-    assert a == b and len(a) &gt; 0
+def test_recorded_history():
+    path = HERE / &quot;history.json&quot;
+    if not path.exists():
+        pytest.skip(&quot;pretrain_tiny.py를 먼저 실행&quot;)
+    h = json.loads(path.read_text(encoding=&quot;utf-8&quot;))
+    pre, ft = h[&quot;pretrain&quot;], h[&quot;full_ft&quot;]
+    assert pre[0][&quot;일반평가&quot;] == pytest.approx(math.log(151936), abs=0.2)
+    assert min(r[&quot;일반평가&quot;] for r in pre) &lt; 6.0                    # 사전학습으로 크게 감소
+    assert ft[-1][&quot;도메인평가&quot;] &lt; ft[0][&quot;도메인평가&quot;] - 1.0           # 도메인 학습 효과
+    assert ft[-1][&quot;일반평가&quot;] &gt; ft[0][&quot;일반평가&quot;]                    # 일반 능력 일부 손실(망각)
 </code></pre></div>
 <p>실행:</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch21 -q
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch25 -q
 </code></pre></div>
-<p>실제 실행 결과(교재 검증 환경, 모델 파일 내려받은 상태):</p>
+<p>실제 실행 결과(교재 검증 환경, <code>pretrain_tiny.py</code> 실행 후):</p>
 <div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>.....                                                                    [100%]
-5 passed in 5.21s
+5 passed in 3.72s
 </code></pre></div>
-<p>토크나이저나 Base 모델을 아직 내려받지 않았다면 해당 테스트는 건너뜀(skipped)으로 표시됩니다.</p>
 <table>
 <thead>
 <tr>
@@ -1074,44 +997,55 @@ def test_greedy_is_reproducible(tok):
 </thead>
 <tbody>
 <tr>
-  <td>블록 자르기</td>
-  <td>남는 꼬리를 버리고 길이가 같은 블록만 남김</td>
+  <td>짧은 학습</td>
+  <td>규칙이 있는 데이터에서 평가 손실이 1 이상 감소, NaN 없음</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>학습·평가 분리</td>
-  <td>평가 문장이 학습 문장에 없음</td>
+  <td>Scheduler와 Clipping</td>
+  <td>마지막 학습률 0, 자르기 전 노름 기록</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>고정 데이터</td>
-  <td>학습 <code>(25, 128)</code>, 평가 <code>(5, 128)</code>, 지문이 기준값과 같음</td>
+  <td>동결 존중</td>
+  <td>학습 제외로 표시한 가중치는 학습 후에도 그대로</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>문장 구분</td>
-  <td>문장마다 문장 끝 토큰(151643)이 붙음</td>
+  <td>저장·재로딩</td>
+  <td>다시 불러온 모델의 Logits가 완전히 같음</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>생성 재현</td>
-  <td>같은 설정의 Greedy 생성을 두 번 하면 결과가 같음</td>
+  <td>학습 기록</td>
+  <td>사전학습 시작 ≈ ln V, 최저 평가 손실 6 미만, 도메인 손실 1 이상 감소, 일반 손실 증가</td>
   <td>통과</td>
+</tr>
+<tr>
+  <td>0.5B Full FT</td>
+  <td>고정 메모리 7.36GiB &gt; 2GiB, 실행 불가 판정</td>
+  <td>통과</td>
+</tr>
+<tr>
+  <td>GT 1030 최대 VRAM</td>
+  <td>설계 예산 약 1.5GB 이하</td>
+  <td>미검증</td>
 </tr>
 </tbody>
 </table>
-<p>이 장의 실습은 CPU에서 실행하며, CPU와 GT 1030 경로 모두 위 결과가 기준입니다. 학습이 시작되는 제22장부터는 <code>select_device()</code>로 장치를 고릅니다.</p>
-<p><strong>완료 기준:</strong> 자신이 궁금한 질문 하나를 <code>QUESTIONS</code>에 더해 네 가지 조합의 응답을 표로 정리하고, 그 질문에 필요한 것이 형식인지 지식인지 판단해 프롬프트·RAG·파인튜닝 중 무엇이 맞는지 적으며, 테스트 5개를 모두 통과하면 이 장을 마친 것입니다.</p>
-</section><section class="section" id="s07"><h2><span class="num">07</span>핵심 정리</h2><ul>
-<li>사전학습은 무작위 가중치에서 방대한 글로 다음 토큰 예측을 배우는 단계이고, 파인튜닝은 그 가중치에서 출발해 적은 데이터로 같은 학습을 이어 가는 단계입니다.</li>
-<li>Base와 Instruct 모델은 구조가 같고 가중치만 다릅니다. Instruct 모델은 사후 학습으로 대화 형식에 답하고 멈추는 법을 배웠습니다.</li>
-<li>프롬프트는 입력을, RAG는 참고 자료를, 파인튜닝은 가중치를 바꿉니다. 지식이 필요하면 RAG, 형식과 행동을 바꾸려면 파인튜닝이 맞습니다.</li>
-<li>제3·4부의 비교 실험은 지문으로 고정된 같은 데이터(학습 블록 25개, 평가 블록 5개, 길이 128)를 씁니다.</li>
+<p>GT 1030 최대 VRAM은 교재 검증 환경에 GPU가 없어 측정하지 못했습니다. 0.5B Full FT 판정은 계산으로 한 것입니다.</p>
+<p><strong>완료 기준:</strong> <code>PRE_STEPS</code>를 150으로 줄여 다시 학습하고 평가 손실이 가장 낮은 지점에서 멈췄을 때 Full FT 결과가 어떻게 달라지는지 기록하고, Full FT 학습률을 1e-3으로 올리면 망각이 커지는지 확인하며, 테스트 5개를 모두 통과하면 이 장을 마친 것입니다.</p>
+</section><section class="section" id="s09"><h2><span class="num">09</span>핵심 정리</h2><ul>
+<li>학습 루프는 순전파 → 손실 → 역전파(→ Accumulation) → Clipping → 갱신 → 초기화의 반복이며, 학습률·손실·Gradient 노름·평가 손실을 함께 기록합니다.</li>
+<li>무작위 Qwen2-Tiny는 300단계의 사전학습으로 평가 손실이 12에서 5.6까지 내려갔지만, 작은 데이터를 반복하면 곧 과적합이 옵니다. 평가 손실로 멈출 지점을 고릅니다.</li>
+<li>Hugging Face 형식으로 저장한 모델은 재로딩 후 출력이 완전히 같으며, 이후 PEFT·TRL·GGUF가 모두 이 폴더를 씁니다.</li>
+<li>Full Fine-tuning은 새 분야의 손실을 크게 줄이지만, 일반 능력의 일부를 잃는 망각을 함께 일으킵니다.</li>
+<li>0.5B 모델의 FP32 Full FT는 고정 메모리만 7.36GiB로 GT 1030에서 실행할 수 없습니다.</li>
 </ul>
-<p><strong>다음 장 연결:</strong> 모델이 &quot;다음 토큰을 얼마나 잘 맞히는가&quot;를 숫자 하나로 재야 학습을 시작할 수 있습니다. 제22장에서는 그 숫자, Cross Entropy 손실과 Perplexity를 직접 계산하고, 고정 평가 데이터에서 Qwen2.5의 기준 Perplexity를 측정합니다.</p>
+<p><strong>다음 장 연결:</strong> 제26장에서는 가중치의 일부를 얼리고 나머지만 학습하는 부분 학습을 다룹니다. Qwen2-Tiny의 마지막 Block만 학습해 학습 가능 파라미터와 메모리가 얼마나 줄어드는지, 망각은 어떻게 달라지는지 Full FT와 비교합니다.</p>
 </section><div class="chapter-links" id="chapter-links"></div></main></div>
 <footer class="footer">LLM 파인튜닝 및 로컬 AI 구현 · v01  · 실습 결과는 실제 환경에서 검증</footer>
-<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v01.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v01.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v01.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v01.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v01.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}]};</script><script>/*
+<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v01.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v02.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}]};</script><script>/*
  * 교육용 HTML 공통 동작 — 유지보수용 원본 (STANDARD 4·10.3·10.4)
  * 페이지 본문은 바꾸지 않고 탐색·이전/다음·모바일 메뉴·코드 복사만 덧붙인다.
  * 입력: 페이지의 window.COURSE (tools/guide/build_guides.py가 실제 존재하는 장만 넣음),
