@@ -506,6 +506,23 @@
         "Saturation",
         "반올림"
       ]
+    },
+    {
+      "id": "ch32",
+      "number": 32,
+      "title": "FP32·FP16·BF16",
+      "subtitle": "IEEE 754 구조 → FP16과 BF16 → 저장 자료형과 연산 자료형 → Mixed Precision과 GradScaler",
+      "slug": "ch32_float_formats",
+      "version": "v01",
+      "source": "content/ch32.md",
+      "tags": [
+        "IEEE 754",
+        "FP16",
+        "BF16",
+        "Mixed Precision",
+        "GradScaler",
+        "Loss Scaling"
+      ]
     }
   ]
 }
