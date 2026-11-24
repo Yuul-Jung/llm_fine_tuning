@@ -489,6 +489,23 @@
         "Adapter",
         "merge_and_unload"
       ]
+    },
+    {
+      "id": "ch31",
+      "number": 31,
+      "title": "컴퓨터의 수 표현",
+      "subtitle": "정수와 2의 보수 → 비트 폭과 표현 범위 → 고정소수점과 Q Format → Overflow, Saturation, Rounding",
+      "slug": "ch31_number_format",
+      "version": "v01",
+      "source": "content/ch31.md",
+      "tags": [
+        "2의 보수",
+        "비트 폭",
+        "고정소수점",
+        "Q Format",
+        "Saturation",
+        "반올림"
+      ]
     }
   ]
 }
