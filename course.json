@@ -621,6 +621,23 @@
         "Gradient Checkpointing",
         "Paged Optimizer"
       ]
+    },
+    {
+      "id": "ch39",
+      "number": 39,
+      "title": "QLoRA 최소 학습",
+      "subtitle": "학습 준비 → GT 1030 메모리 설정 → 최소 학습 루프 → 동결 검증과 Adapter 저장 → CPU 경로",
+      "slug": "ch39_qlora_train",
+      "version": "v01",
+      "source": "content/ch39.md",
+      "tags": [
+        "QLoRA",
+        "4비트",
+        "LoRA",
+        "Gradient Checkpointing",
+        "Adapter",
+        "CPU 경로"
+      ]
     }
   ]
 }
