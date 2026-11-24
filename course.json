@@ -276,6 +276,22 @@
         "Gate",
         "Qwen"
       ]
+    },
+    {
+      "id": "ch18",
+      "number": 18,
+      "title": "정규화와 Residual Connection",
+      "subtitle": "정규화의 필요성 → LayerNorm과 RMSNorm → 잔차 연결 → Pre-Norm과 Final Norm → Decoder Layer 재현",
+      "slug": "ch18_rmsnorm_residual",
+      "version": "v01",
+      "source": "content/ch18.md",
+      "tags": [
+        "RMSNorm",
+        "LayerNorm",
+        "Residual",
+        "Pre-Norm",
+        "Decoder Layer"
+      ]
     }
   ]
 }
