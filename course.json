@@ -228,6 +228,22 @@
         "Self-Attention",
         "Qwen"
       ]
+    },
+    {
+      "id": "ch15",
+      "number": 15,
+      "title": "Multi-Head Attention과 GQA",
+      "subtitle": "여러 헤드의 필요성 → 헤드 분할·결합 → MQA·GQA → repeat_kv 구현 → 실제 모델 Attention 재현",
+      "slug": "ch15_mha_gqa",
+      "version": "v01",
+      "source": "content/ch15.md",
+      "tags": [
+        "Multi-Head",
+        "GQA",
+        "MQA",
+        "KV Cache",
+        "Qwen"
+      ]
     }
   ]
 }
