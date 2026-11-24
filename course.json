@@ -457,6 +457,22 @@
         "Scaling",
         "병합"
       ]
+    },
+    {
+      "id": "ch29",
+      "number": 29,
+      "title": "PyTorch LoRA 직접 구현",
+      "subtitle": "LoRALinear 설계 → 순전파와 역전파 → Qwen2-Tiny에 적용 → 가중치 병합",
+      "slug": "ch29_lora_scratch",
+      "version": "v01",
+      "source": "content/ch29.md",
+      "tags": [
+        "LoRA",
+        "LoRALinear",
+        "동결",
+        "병합",
+        "Qwen2-Tiny"
+      ]
     }
   ]
 }
