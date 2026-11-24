@@ -557,6 +557,22 @@
         "FPGA",
         "BRAM"
       ]
+    },
+    {
+      "id": "ch35",
+      "number": 35,
+      "title": "역양자화와 오차 분석",
+      "subtitle": "역양자화 → MSE와 최대 절대오차 → 이상치의 영향 → 행렬곱 출력 오차",
+      "slug": "ch35_quant_error",
+      "version": "v01",
+      "source": "content/ch35.md",
+      "tags": [
+        "역양자화",
+        "가짜 양자화",
+        "MSE",
+        "이상치",
+        "Perplexity"
+      ]
     }
   ]
 }
