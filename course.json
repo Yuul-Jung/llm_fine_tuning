@@ -440,6 +440,23 @@
         "특잇값",
         "LoRA"
       ]
+    },
+    {
+      "id": "ch28",
+      "number": 28,
+      "title": "LoRA의 수학적 원리",
+      "subtitle": "W와 ΔW → A, B의 모양과 초기화 → Alpha와 Scaling → 파라미터 수 계산",
+      "slug": "ch28_lora_math",
+      "version": "v01",
+      "source": "content/ch28.md",
+      "tags": [
+        "LoRA",
+        "ΔW",
+        "초기화",
+        "Alpha",
+        "Scaling",
+        "병합"
+      ]
     }
   ]
 }
