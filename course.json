@@ -605,6 +605,22 @@
         "4비트 로딩",
         "버전 고정"
       ]
+    },
+    {
+      "id": "ch38",
+      "number": 38,
+      "title": "QLoRA 구조와 메모리 최적화",
+      "subtitle": "QLoRA의 구성 → 학습 메모리 분해 → Gradient Checkpointing → Paged Optimizer",
+      "slug": "ch38_qlora_memory",
+      "version": "v01",
+      "source": "content/ch38.md",
+      "tags": [
+        "QLoRA",
+        "메모리 분해",
+        "Activation",
+        "Gradient Checkpointing",
+        "Paged Optimizer"
+      ]
     }
   ]
 }
