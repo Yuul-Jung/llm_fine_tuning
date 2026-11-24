@@ -59,7 +59,7 @@
       "title": "행렬 연산과 내적",
       "subtitle": "내적 → 분산과 √d → 원소별 곱·행렬곱 → 차원 규칙 → Broadcasting·Batch → 반복문 구현",
       "slug": "ch04_matrix_dot",
-      "version": "v02",
+      "version": "v03",
       "source": "content/ch04.md",
       "tags": [
         "내적",
@@ -155,7 +155,7 @@
       "title": "Embedding과 벡터 표현",
       "subtitle": "One-hot → Embedding Lookup → 코사인 유사도 → Qwen Embedding과 Weight Tying → Logits 메모리",
       "slug": "ch10_embedding",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch10.md",
       "tags": [
         "Embedding",
@@ -171,7 +171,7 @@
       "title": "Transformer 전체 구조",
       "subtitle": "RNN과 Attention → Decoder-only → Transformer Block → Qwen2 데이터 흐름과 실제 계층 대조",
       "slug": "ch11_transformer_architecture",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch11.md",
       "tags": [
         "Transformer",
@@ -283,7 +283,7 @@
       "title": "정규화와 Residual Connection",
       "subtitle": "정규화의 필요성 → LayerNorm과 RMSNorm → 잔차 연결 → Pre-Norm과 Final Norm → Decoder Layer 재현",
       "slug": "ch18_rmsnorm_residual",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch18.md",
       "tags": [
         "RMSNorm",
@@ -315,7 +315,7 @@
       "title": "실제 Qwen 모델 구조와 추론 분석",
       "subtitle": "Auto 클래스 → 계층 이름과 Shape → Forward Hook → Sampling과 생성 설정 → KV Cache 메모리 → Qwen2-Tiny와 비교",
       "slug": "ch20_qwen_analysis",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch20.md",
       "tags": [
         "AutoModel",
