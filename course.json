@@ -212,6 +212,22 @@
         "Softmax",
         "가중합"
       ]
+    },
+    {
+      "id": "ch14",
+      "number": 14,
+      "title": "Causal Mask와 Self-Attention",
+      "subtitle": "미래 정보 차단 → 하삼각 마스크 → Causal·Padding Mask 결합 → 실제 모델에서 미래 차단 증명",
+      "slug": "ch14_causal_mask",
+      "version": "v01",
+      "source": "content/ch14.md",
+      "tags": [
+        "Causal Mask",
+        "Padding Mask",
+        "attention_mask",
+        "Self-Attention",
+        "Qwen"
+      ]
     }
   ]
 }
