@@ -36,6 +36,22 @@
         "VRAM",
         "GFLOPS"
       ]
+    },
+    {
+      "id": "ch03",
+      "number": 3,
+      "title": "Tensor 구조와 차원",
+      "subtitle": "차원·모양·축 → Indexing·Slicing → Reshape·Transpose → 헤드 분할 왕복 검증",
+      "slug": "ch03_tensor_shape",
+      "version": "v01",
+      "source": "content/ch03.md",
+      "tags": [
+        "Tensor",
+        "Shape",
+        "Reshape",
+        "Transpose",
+        "Multi-Head"
+      ]
     }
   ]
 }
