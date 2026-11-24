@@ -68,6 +68,22 @@
         "Broadcasting",
         "Batch"
       ]
+    },
+    {
+      "id": "ch05",
+      "number": 5,
+      "title": "가중치와 Linear Layer",
+      "subtitle": "가중치·편향 → 표기 규약 y = xWᵀ + b → nn.Linear 해부 → 직접 구현 → 실제 Qwen 가중치 계산",
+      "slug": "ch05_linear_layer",
+      "version": "v01",
+      "source": "content/ch05.md",
+      "tags": [
+        "Linear",
+        "Weight",
+        "Bias",
+        "safetensors",
+        "Qwen"
+      ]
     }
   ]
 }
