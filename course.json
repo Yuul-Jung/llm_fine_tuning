@@ -407,6 +407,23 @@
         "파국적 망각",
         "Checkpoint"
       ]
+    },
+    {
+      "id": "ch26",
+      "number": 26,
+      "title": "가중치 동결과 PEFT",
+      "subtitle": "가중치 동결 → 부분 학습 → PEFT의 발상",
+      "slug": "ch26_freeze_peft",
+      "version": "v01",
+      "source": "content/ch26.md",
+      "tags": [
+        "동결",
+        "requires_grad",
+        "부분 학습",
+        "PEFT",
+        "Adapter",
+        "LoRA"
+      ]
     }
   ]
 }
