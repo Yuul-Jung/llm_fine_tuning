@@ -12,3 +12,4 @@ huggingface_hub
 safetensors
 transformers
 peft                      # 제30장부터(교재 검증: 0.22.0)
+bitsandbytes              # 제36장부터(GT 1030 CUDA 실행은 제37장에서 확인, 미검증)

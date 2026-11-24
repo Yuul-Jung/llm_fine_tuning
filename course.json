@@ -573,6 +573,22 @@
         "이상치",
         "Perplexity"
       ]
+    },
+    {
+      "id": "ch36",
+      "number": 36,
+      "title": "NF4와 블록 단위 양자화",
+      "subtitle": "가중치 분포와 NF4 → Codebook 양자화 → Block-wise와 Double Quantization → 저장 비용",
+      "slug": "ch36_nf4",
+      "version": "v01",
+      "source": "content/ch36.md",
+      "tags": [
+        "NF4",
+        "Codebook",
+        "Block-wise",
+        "Double Quantization",
+        "bitsandbytes"
+      ]
     }
   ]
 }
