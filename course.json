@@ -260,6 +260,22 @@
         "rope_theta",
         "Qwen"
       ]
+    },
+    {
+      "id": "ch17",
+      "number": 17,
+      "title": "FFN과 SwiGLU",
+      "subtitle": "FFN의 역할 → Gate·Up·Down Projection → SiLU와 SwiGLU → 파라미터와 연산량 → 실제 모델 MLP 재현",
+      "slug": "ch17_ffn_swiglu",
+      "version": "v01",
+      "source": "content/ch17.md",
+      "tags": [
+        "FFN",
+        "SwiGLU",
+        "SiLU",
+        "Gate",
+        "Qwen"
+      ]
     }
   ]
 }
