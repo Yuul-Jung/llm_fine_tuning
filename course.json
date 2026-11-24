@@ -148,6 +148,22 @@
         "UTF-8",
         "Qwen"
       ]
+    },
+    {
+      "id": "ch10",
+      "number": 10,
+      "title": "Embedding과 벡터 표현",
+      "subtitle": "One-hot → Embedding Lookup → 코사인 유사도 → Qwen Embedding과 Weight Tying → Logits 메모리",
+      "slug": "ch10_embedding",
+      "version": "v01",
+      "source": "content/ch10.md",
+      "tags": [
+        "Embedding",
+        "Lookup",
+        "코사인 유사도",
+        "Weight Tying",
+        "Qwen"
+      ]
     }
   ]
 }
