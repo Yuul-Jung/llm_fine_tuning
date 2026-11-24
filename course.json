@@ -292,6 +292,22 @@
         "Pre-Norm",
         "Decoder Layer"
       ]
+    },
+    {
+      "id": "ch19",
+      "number": 19,
+      "title": "Qwen2-Tiny 조립과 순전파 검증",
+      "subtitle": "Qwen2-Tiny 설계 → 전체 모델 조립 → Weight Tying → 차원 추적과 파라미터 수 → Hugging Face 형식 호환",
+      "slug": "ch19_qwen2_tiny",
+      "version": "v01",
+      "source": "content/ch19.md",
+      "tags": [
+        "Qwen2-Tiny",
+        "Weight Tying",
+        "파라미터 수",
+        "Qwen2ForCausalLM",
+        "safetensors"
+      ]
     }
   ]
 }
