@@ -373,6 +373,23 @@
         "Autograd",
         "gradcheck"
       ]
+    },
+    {
+      "id": "ch24",
+      "number": 24,
+      "title": "Optimizer와 학습 반복",
+      "subtitle": "경사하강법과 SGD → Momentum, Adam, AdamW → Learning Rate, Batch, Epoch → Optimizer State와 메모리 → Scheduler, Accumulation, Clipping",
+      "slug": "ch24_optimizer",
+      "version": "v01",
+      "source": "content/ch24.md",
+      "tags": [
+        "SGD",
+        "Adam",
+        "AdamW",
+        "Weight Decay",
+        "Learning Rate",
+        "Optimizer State"
+      ]
     }
   ]
 }
