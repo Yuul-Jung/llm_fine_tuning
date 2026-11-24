@@ -308,6 +308,22 @@
         "Qwen2ForCausalLM",
         "safetensors"
       ]
+    },
+    {
+      "id": "ch20",
+      "number": 20,
+      "title": "실제 Qwen 모델 구조와 추론 분석",
+      "subtitle": "Auto 클래스 → 계층 이름과 Shape → Forward Hook → Sampling과 생성 설정 → KV Cache 메모리 → Qwen2-Tiny와 비교",
+      "slug": "ch20_qwen_analysis",
+      "version": "v01",
+      "source": "content/ch20.md",
+      "tags": [
+        "AutoModel",
+        "Forward Hook",
+        "Sampling",
+        "KV Cache",
+        "GQA"
+      ]
     }
   ]
 }
