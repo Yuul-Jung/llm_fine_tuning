@@ -424,6 +424,22 @@
         "Adapter",
         "LoRA"
       ]
+    },
+    {
+      "id": "ch27",
+      "number": 27,
+      "title": "Rank와 저랭크 분해",
+      "subtitle": "행렬의 Rank → SVD와 저랭크 근사 → 파라미터 수 절약 → LoRA와 SVD의 차이",
+      "slug": "ch27_rank_svd",
+      "version": "v01",
+      "source": "content/ch27.md",
+      "tags": [
+        "Rank",
+        "SVD",
+        "저랭크 근사",
+        "특잇값",
+        "LoRA"
+      ]
     }
   ]
 }
