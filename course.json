@@ -11,7 +11,7 @@
       "title": "LLM 개요와 로컬 개발환경",
       "subtitle": "AI 지도 → 다음 토큰 예측 → 개발환경 → 장치 자동 선택 → 첫 로컬 LLM 실행",
       "slug": "ch01_llm_overview_environment",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch01.md",
       "tags": [
         "LLM",
@@ -59,7 +59,7 @@
       "title": "행렬 연산과 내적",
       "subtitle": "내적 → 분산과 √d → 원소별 곱·행렬곱 → 차원 규칙 → Broadcasting·Batch → 반복문 구현",
       "slug": "ch04_matrix_dot",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch04.md",
       "tags": [
         "내적",
@@ -123,7 +123,7 @@
       "title": "Tokenizer와 Vocabulary",
       "subtitle": "토큰·어휘 집합 → 문자·단어·서브워드 → 특수 토큰 → Qwen2.5 토크나이저로 한글·영문 비교",
       "slug": "ch08_tokenizer_vocab",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch08.md",
       "tags": [
         "Tokenizer",
@@ -139,7 +139,7 @@
       "title": "BPE 토크나이저 직접 구현",
       "subtitle": "BPE의 아이디어 → 쌍 빈도와 병합 → 병합 규칙으로 인코딩 → Byte-level BPE → Qwen 병합 규칙 확인",
       "slug": "ch09_bpe_tokenizer",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch09.md",
       "tags": [
         "BPE",

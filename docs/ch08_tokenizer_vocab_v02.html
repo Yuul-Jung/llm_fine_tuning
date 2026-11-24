@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="AI 지도 → 다음 토큰 예측 → 개발환경 → 장치 자동 선택 → 첫 로컬 LLM 실행"><title>제01장 · LLM 개요와 로컬 개발환경 · LLM 파인튜닝 및 로컬 AI 구현</title>
+<meta name="description" content="토큰·어휘 집합 → 문자·단어·서브워드 → 특수 토큰 → Qwen2.5 토크나이저로 한글·영문 비교"><title>제08장 · Tokenizer와 Vocabulary · LLM 파인튜닝 및 로컬 AI 구현</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>/*
@@ -576,11 +576,11 @@ pre code {
     height: auto;
   }
 }
-</style></head><body data-chapter="ch01">
+</style></head><body data-chapter="ch08">
 <button type="button" class="mobile-menu" id="mobile-menu" aria-controls="course-nav" aria-expanded="false">☰ 장·목차</button><div class="shade" id="shade"></div>
-<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 01</p><h1>제01장 · LLM 개요와 로컬 개발환경</h1><p>AI 지도 → 다음 토큰 예측 → 개발환경 → 장치 자동 선택 → 첫 로컬 LLM 실행</p><div class="chips"><span class="chip">LLM</span><span class="chip">Ubuntu</span><span class="chip">VS Code</span><span class="chip">PyTorch</span><span class="chip">Ollama</span></div></div></header>
-<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>이 장은 긴 여정의 출발선입니다. 앞으로 59개의 장에서 LLM의 내부를 열어 보고, 직접 학습시키고, 내 컴퓨터에 배포하게 됩니다. 그 모든 실습이 같은 환경에서 같은 결과를 내려면 출발점이 단단해야 합니다.</p>
-<p>제01장은 두 가지를 해냅니다. 첫째, LLM이 무엇이고 이 교재가 그중 어디를 다루는지 큰 그림을 그립니다. 둘째, 그 그림을 실제로 확인할 로컬 실습 환경을 만들고 첫 번째 LLM을 실행합니다.</p>
+<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 08</p><h1>제08장 · Tokenizer와 Vocabulary</h1><p>토큰·어휘 집합 → 문자·단어·서브워드 → 특수 토큰 → Qwen2.5 토크나이저로 한글·영문 비교</p><div class="chips"><span class="chip">Tokenizer</span><span class="chip">Vocabulary</span><span class="chip">특수 토큰</span><span class="chip">AutoTokenizer</span><span class="chip">Qwen</span></div></div></header>
+<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제07장의 Bigram 모델은 글자 하나를 토큰으로 썼습니다. 실제 LLM은 다릅니다. 글자보다 크고 단어보다 작은 조각, **서브워드(Subword)**를 토큰으로 씁니다. 문장을 이 조각으로 자르고 번호를 붙이는 도구가 토크나이저(Tokenizer)입니다.</p>
+<p>모델은 글자를 보지 못합니다. 모델이 보는 것은 토크나이저가 건네준 <strong>정수 ID의 나열</strong>뿐입니다. 그래서 토크나이저는 모델의 눈이자 입구입니다. 이 장에서는 Qwen2.5의 실제 토크나이저로 한글과 영문 문장을 잘라 보고, 숫자가 된 문장이 다시 원래 문장으로 정확히 돌아오는지 확인합니다.</p>
 <table>
 <thead>
 <tr>
@@ -591,636 +591,329 @@ pre code {
 <tbody>
 <tr>
   <td>핵심 질문</td>
-  <td>LLM은 무엇을 하는 프로그램이며, 내 컴퓨터에서 어떻게 실행되는가</td>
+  <td>문장은 어떻게 정수 ID가 되며, 한글과 영문은 왜 토큰 수가 다른가</td>
 </tr>
 <tr>
   <td>실습 결과물</td>
-  <td>환경 점검 보고서(<code>env_report.json</code>), 로컬 LLM 응답과 생성 속도 기록</td>
+  <td>Qwen2.5 토큰화 결과, 문자·단어·서브워드 개수 비교, 특수 토큰 표</td>
 </tr>
 <tr>
   <td>실습 파일</td>
-  <td><code>examples/ch01/</code>의 <code>check_env.py</code>, <code>ollama_generate.py</code>, <code>test_ch01.py</code>와 공통 모듈 <code>examples/common/device.py</code></td>
+  <td><code>examples/ch08/</code>의 <code>tokenize_compare.py</code>, <code>test_ch08.py</code></td>
 </tr>
 <tr>
-  <td>실습 환경</td>
-  <td>Ubuntu 24.04, VS Code, Python 3.12 이상, CPU 또는 GT 1030 2GB</td>
+  <td>선수 장</td>
+  <td>제07장(토큰·어휘·특수 토큰의 개념)</td>
 </tr>
 </tbody>
 </table>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>[개념] AI 지도 → LLM의 원리 → 모델의 일생 → 로컬 실행 경로
-   ↓
-[환경] VS Code → 가상환경 → PyTorch → 장치 자동 선택
-   ↓
-[실행] Ollama 설치 → 모델 받기 → API 호출 → 속도 측정
-   ↓
-[검증] 환경 보고서 + 단위 테스트 + 응답 기록
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>&quot;언어 모델은 …&quot;  ──토크나이저(Encoding)──▶  [129709, 31079, 54070, …]  ──▶  모델
+       ▲                                                                       │
+       └──────────────토크나이저(Decoding)◀──  [다음 토큰 ID]  ◀─────────────────┘
 </code></pre></div>
-</section><section class="section" id="s01"><h2><span class="num">01</span>AI·머신러닝·딥러닝·생성형 AI</h2><p>네 용어는 서로 다른 기술이 아니라 <strong>안쪽으로 좁아지는 동심원</strong>입니다. 바깥 원의 성질을 안쪽 원이 모두 물려받습니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>┌─ 인공지능(AI) ─ 사람의 지적 작업을 컴퓨터로 수행하는 모든 기술
-│  ┌─ 머신러닝(ML) ─ 규칙을 사람이 쓰지 않고 데이터에서 학습
-│  │  ┌─ 딥러닝(DL) ─ 여러 층의 신경망으로 특징까지 스스로 학습
-│  │  │  ┌─ 생성형 AI ─ 학습한 분포에서 새로운 데이터를 만들어 냄
-│  │  │  │   └─ LLM ─ 대규모 텍스트로 학습한, 텍스트를 생성하는 모델
-</code></pre></div>
+</section><section class="section" id="s01"><h2><span class="num">01</span>토큰과 어휘 집합</h2><p>토크나이저가 하는 일은 사전 찾기와 비슷합니다. 미리 정해 둔 조각 목록, 즉 **어휘 집합(Vocabulary)**이 있고, 각 조각에는 고유 번호(Token ID)가 붙어 있습니다.</p>
 <table>
 <thead>
 <tr>
-  <th>구분</th>
-  <th>무엇이 달라졌는가</th>
-  <th>예시</th>
+  <th>용어</th>
+  <th>뜻</th>
+  <th>Qwen2.5</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>인공지능</td>
-  <td>지능적 작업을 기계에 맡긴다는 목표</td>
-  <td>규칙 기반 전문가 시스템, 체스 프로그램</td>
+  <td>토큰(Token)</td>
+  <td>모델이 처리하는 문자열 조각</td>
+  <td><code>&quot; model&quot;</code>, <code>&quot;한다&quot;</code>, <code>&quot;.&quot;</code></td>
 </tr>
 <tr>
-  <td>머신러닝</td>
-  <td>규칙 대신 <strong>데이터</strong>에서 패턴을 찾는다</td>
-  <td>스팸 필터, 집값 예측</td>
+  <td>어휘 집합(Vocabulary)</td>
+  <td>모든 토큰의 목록</td>
+  <td>일반 토큰 151,643개</td>
 </tr>
 <tr>
-  <td>딥러닝</td>
-  <td>특징 추출까지 <strong>신경망</strong>이 스스로 한다</td>
-  <td>이미지 분류, 음성 인식</td>
+  <td>Token ID</td>
+  <td>어휘 집합 안의 번호</td>
+  <td><code>&quot; model&quot;</code> → 1614</td>
 </tr>
 <tr>
-  <td>생성형 AI</td>
-  <td>분류를 넘어 새 결과물을 <strong>생성</strong>한다</td>
-  <td>이미지 생성, 텍스트 생성</td>
+  <td>Encoding</td>
+  <td>문자열 → Token ID 목록</td>
+  <td>토크나이저</td>
 </tr>
 <tr>
-  <td>LLM</td>
-  <td>생성형 AI 가운데 <strong>텍스트</strong>를 다루는 대규모 모델</td>
-  <td>Qwen, Llama, GPT 계열</td>
+  <td>Decoding</td>
+  <td>Token ID 목록 → 문자열</td>
+  <td>토크나이저</td>
 </tr>
 </tbody>
 </table>
-<p>이 교재에서 다루는 Qwen2.5는 가장 안쪽 원, LLM에 속합니다. 따라서 딥러닝의 기본 부품인 행렬·가중치·학습 원리를 먼저 익혀야 LLM을 제대로 다룰 수 있습니다. 제1~3부가 바로 그 순서로 짜여 있습니다.</p>
-</section><section class="section" id="s02"><h2><span class="num">02</span>LLM이 하는 일: 다음 토큰 예측</h2><p>LLM이 요약하고, 번역하고, 코드를 짜는 모습은 다채로워 보입니다. 그러나 그 속에서 일어나는 일은 단 하나입니다.</p>
-<blockquote>
-<p><strong>앞의 문맥을 보고, 다음에 올 토큰의 확률을 계산해, 하나를 고른다.</strong></p>
-</blockquote>
-<p>토큰(Token, 모델이 처리하는 글자 조각)은 글자 하나일 수도, 단어 일부일 수도 있습니다. 모델은 고른 토큰을 문맥 끝에 붙이고 같은 일을 다시 반복합니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>입력 문맥: &quot;대한민국의 수도는&quot;
-  1회차 → 확률 계산 → &quot; 서울&quot;  선택 → &quot;대한민국의 수도는 서울&quot;
-  2회차 → 확률 계산 → &quot;입니다&quot; 선택 → &quot;대한민국의 수도는 서울입니다&quot;
-  3회차 → 확률 계산 → &quot;.&quot;      선택 → &quot;대한민국의 수도는 서울입니다.&quot;
-  4회차 → 확률 계산 → [종료]   선택 → 생성 끝
-</code></pre></div>
-<p>이 방식을 <strong>자기회귀(Autoregressive, 자기 출력을 다시 입력으로 쓰는 방식) 생성</strong>이라 부릅니다. 긴 답변도 결국 이 한 걸음을 수백 번 반복한 결과입니다. 그래서 LLM의 속도는 &quot;초당 몇 개의 토큰을 생성하는가(tokens/s)&quot;로 잽니다. 이 장의 마지막 실습에서 바로 이 숫자를 측정합니다.</p>
-<p>확률을 계산하는 장치의 내부, 즉 Embedding·Attention·FFN은 제2부에서 하나씩 직접 구현합니다. 지금은 &quot;LLM = 다음 토큰 확률 계산기&quot;라는 한 문장만 기억하면 충분합니다.</p>
-</section><section class="section" id="s03"><h2><span class="num">03</span>사전학습·파인튜닝·추론</h2><p>같은 모델도 일생의 단계에 따라 하는 일과 필요한 자원이 전혀 다릅니다.</p>
+<p>어휘 크기는 모델 크기와 직결됩니다. 제10장에서 보겠지만 Embedding 표는 어휘 크기만큼의 행을 가지며, 제02장에서 계산한 Logits 메모리도 어휘 크기에 비례합니다. Qwen2.5-0.5B 파라미터의 약 27.6%가 어휘와 연결된 Embedding입니다.</p>
+<h3>토크나이저 어휘와 모델 어휘의 차이</h3>
+<p>Qwen2.5 토크나이저에는 일반 토큰 151,643개와 특수 토큰 22개, 모두 151,665개가 있습니다. 그런데 모델의 <code>config.json</code>에는 <code>vocab_size</code>가 151,936으로 적혀 있습니다. 차이 271개는 모델의 Embedding 표에 미리 확보해 둔 <strong>쓰이지 않는 여유 행</strong>입니다. 151,936은 128 × 1,187로, 계산 효율을 고려해 넉넉하게 맞춘 값으로 볼 수 있습니다. 모델 메모리를 계산할 때는 151,936을, 토큰을 다룰 때는 151,665를 쓴다는 점을 구분해 둡니다.</p>
+</section><section class="section" id="s02"><h2><span class="num">02</span>문자·단어·서브워드 토큰화</h2><p>문장을 자르는 단위는 세 가지가 가능합니다.</p>
 <table>
 <thead>
 <tr>
-  <th>단계</th>
-  <th>하는 일</th>
-  <th>데이터</th>
-  <th>자원 규모</th>
-  <th>이 교재</th>
+  <th>단위</th>
+  <th>예: &quot;모델은 예측한다&quot;</th>
+  <th>어휘 크기</th>
+  <th>문제점</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>사전학습(Pretraining)</td>
-  <td>방대한 텍스트로 다음 토큰 예측을 처음부터 학습</td>
-  <td>수조 개 토큰</td>
-  <td>대규모 GPU 클러스터</td>
-  <td>원리만 소규모로(제25장)</td>
+  <td>문자</td>
+  <td>모, 델, 은, ␣, 예, 측, 한, 다</td>
+  <td>작다</td>
+  <td>토큰열이 너무 길다</td>
 </tr>
 <tr>
-  <td>파인튜닝(Fine-tuning)</td>
-  <td>학습된 모델을 특정 목적·형식에 맞게 추가 학습</td>
-  <td>수백~수만 개 예시</td>
-  <td>단일 PC도 가능</td>
-  <td><strong>핵심 범위</strong>(제3~5부)</td>
+  <td>단어</td>
+  <td>모델은, 예측한다</td>
+  <td>매우 크다</td>
+  <td>처음 보는 단어를 표현할 수 없다</td>
 </tr>
 <tr>
-  <td>추론(Inference)</td>
-  <td>학습을 마친 모델로 답을 생성</td>
-  <td>사용자 입력</td>
-  <td>노트북·엣지 장치</td>
-  <td><strong>핵심 범위</strong>(제6부)</td>
+  <td>서브워드</td>
+  <td>모, 델, 은, ␣예, 측, 한다</td>
+  <td>적당하다</td>
+  <td>균형점</td>
 </tr>
 </tbody>
 </table>
-<p>사전학습이 &quot;언어와 세상에 대한 일반 지식&quot;을 쌓는 과정이라면, 파인튜닝은 그 지식 위에 &quot;우리 분야의 말투와 전문성&quot;을 입히는 과정입니다. 이 교재는 이미 공개된 사전학습 모델 Qwen2.5를 출발점으로 삼아, 파인튜닝과 추론을 내 컴퓨터 안에서 끝까지 완성하는 것을 목표로 합니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>사전학습된 모델(Qwen2.5)  →  파인튜닝(내 데이터)  →  병합·변환  →  로컬 추론(Ollama)
-      공개 가중치               제3~5부                제6부           제6부
-</code></pre></div>
-</section><section class="section" id="s04"><h2><span class="num">04</span>로컬 AI와 두 가지 하드웨어 경로</h2><p>로컬 AI란 모델이 클라우드가 아닌 <strong>내 컴퓨터 안에서</strong> 실행되는 것을 말합니다. 데이터가 밖으로 나가지 않고, 사용료가 들지 않으며, 네트워크 없이도 동작합니다. 대신 내 컴퓨터의 메모리와 연산 능력이 그대로 한계가 됩니다.</p>
-<p>이 교재는 두 가지 경로를 지원합니다.</p>
+<p>문자 단위는 어떤 글이든 표현할 수 있지만 문장이 너무 길어집니다. 제02장에서 본 것처럼 시퀀스가 길수록 메모리와 계산이 늘어납니다. 단어 단위는 짧지만 &quot;예측한다&quot;, &quot;예측했다&quot;, &quot;예측하는&quot;처럼 활용형마다 어휘가 필요해 어휘가 끝없이 커지고, 처음 보는 단어는 아예 표현하지 못합니다.</p>
+<p>서브워드는 그 중간입니다. 자주 쓰이는 조각(<code>&quot;한다&quot;</code>, <code>&quot; model&quot;</code>)은 통째로 토큰 하나로, 드문 조각은 더 잘게 나눕니다. 처음 보는 단어도 작은 조각을 이어 붙여 표현할 수 있습니다. 이 조각들을 어떻게 정하는지가 제09장 BPE의 주제입니다.</p>
+</section><section class="section" id="s03"><h2><span class="num">03</span>특수 토큰</h2><p>어휘 집합에는 글자가 아닌 <strong>역할</strong>을 나타내는 특수 토큰이 들어 있습니다. 제07장 Bigram 모델의 <code>^</code>(시작)와 <code>$</code>(끝)가 바로 특수 토큰이었습니다.</p>
+<h3>일반적인 역할</h3>
 <table>
 <thead>
 <tr>
-  <th>항목</th>
-  <th>CPU 경로</th>
-  <th>GT 1030 2GB 경로</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>연산 장치</td>
-  <td>다중 코어 CPU</td>
-  <td>NVIDIA GT 1030(Pascal, Compute Capability 6.1)</td>
-</tr>
-<tr>
-  <td>메모리</td>
-  <td>시스템 RAM(16GB 이상 권장)</td>
-  <td>VRAM 2GB</td>
-</tr>
-<tr>
-  <td>연산 자료형</td>
-  <td>FP32</td>
-  <td>FP32</td>
-</tr>
-<tr>
-  <td>강점</td>
-  <td>메모리가 넉넉해 큰 모델도 불러올 수 있음</td>
-  <td>CUDA와 4비트 QLoRA를 직접 경험</td>
-</tr>
-<tr>
-  <td>제약</td>
-  <td>GPU 전용 기능은 체험 불가</td>
-  <td>2GB 안에 모든 것을 맞춰야 함</td>
-</tr>
-</tbody>
-</table>
-<p>두 경로 모두 FP32(32비트 부동소수점)를 씁니다. CPU는 원래 FP32가 기본입니다. GT 1030은 16비트 연산 속도가 32비트의 1/64에 불과해 오히려 FP32가 빠릅니다. 자료형의 원리는 제32장에서 자세히 다룹니다.</p>
-<p>GT 1030의 FP32 연산 성능은 최신 다중 코어 CPU와 큰 차이가 없습니다. 따라서 GPU 경로의 가치는 속도보다 <strong>CUDA·VRAM·양자화를 실제 장비로 경험하는 데</strong> 있습니다. 어느 경로를 택해도 이 교재의 핵심 결과물, 즉 직접 학습한 모델을 로컬에 배포하는 일은 똑같이 완성됩니다.</p>
-</section><section class="section" id="s05"><h2><span class="num">05</span>Ubuntu·VS Code 작업 환경</h2><p>모든 실습은 Ubuntu 24.04와 VS Code를 기준으로 합니다. 저장소를 내려받아 <strong>저장소 루트 폴더 전체</strong>를 VS Code로 여는 것이 출발점입니다.</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># 기본 도구 설치: Git, Python 가상환경 모듈, pip
-sudo apt update
-sudo apt install -y git python3-venv python3-pip
-
-# VS Code 설치(Snap 패키지)
-sudo snap install code --classic
-
-# 교재 저장소 내려받기 → 루트 폴더를 VS Code로 열기
-git clone https://github.com/Yuul-Jung/llm_fine_tuning.git
-cd llm_fine_tuning
-code .
-</code></pre></div>
-<p>저장소에는 VS Code 공통 설정이 함께 들어 있습니다. 폴더를 열면 VS Code가 권장 확장 설치를 제안합니다.</p>
-<table>
-<thead>
-<tr>
-  <th>파일</th>
+  <th>토큰</th>
   <th>역할</th>
+  <th>쓰임</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td><code>.vscode/settings.json</code></td>
-  <td>들여쓰기 4칸, 줄 끝 공백 제거, 가상환경 인터프리터 지정, pytest 연동</td>
+  <td>BOS(Beginning of Sequence)</td>
+  <td>문장 시작 표시</td>
+  <td>모델에 따라 입력 맨 앞에 붙인다</td>
 </tr>
 <tr>
-  <td><code>.vscode/extensions.json</code></td>
-  <td>Python, Pylance, Live Server 확장 권장</td>
+  <td>EOS(End of Sequence)</td>
+  <td>생성 종료 표시</td>
+  <td>모델이 이 토큰을 고르면 생성을 멈춘다</td>
+</tr>
+<tr>
+  <td>PAD(Padding)</td>
+  <td>길이 맞춤용 빈칸</td>
+  <td>길이가 다른 문장을 묶음으로 만들 때 채운다</td>
 </tr>
 </tbody>
 </table>
-<p>하위 폴더(<code>examples/ch01</code> 등)만 따로 열지 않습니다. 모든 실습 코드가 <code>examples/common</code>의 공통 모듈을 공유하기 때문에, 루트를 기준으로 열어야 경로가 어긋나지 않습니다.</p>
-</section><section class="section" id="s06"><h2><span class="num">06</span>Python 가상환경과 PyTorch 설치</h2><p>가상환경은 프로젝트마다 독립된 Python 꾸러미 공간입니다. 다른 프로젝트의 라이브러리 버전과 섞이지 않으므로, 같은 명령이 언제나 같은 결과를 냅니다. 재현성은 바로 여기서 시작됩니다.</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># 저장소 루트에서 가상환경 생성 → 활성화
-python3 -m venv .venv
-source .venv/bin/activate
-
-# pip 최신화
-python -m pip install --upgrade pip
+<h3>Qwen2.5의 실제 설정</h3>
+<p>모델마다 특수 토큰 설정이 다르므로 일반론을 그대로 적용하면 안 됩니다. Qwen2.5-0.5B-Instruct의 실제 값은 다음과 같습니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>BOS        없음(None)        문장 앞에 시작 토큰을 자동으로 붙이지 않는다
+EOS        &lt;|im_end|&gt;       ID 151645   대화 응답 한 차례의 끝, 생성 종료
+PAD        &lt;|endoftext|&gt;    ID 151643   길이 맞춤용, EOS와 다른 토큰
+대화 시작   &lt;|im_start|&gt;     ID 151644   대화에서 역할(System·User·Assistant)의 시작
 </code></pre></div>
-<p>PyTorch는 경로에 따라 설치 명령이 다릅니다. 핵심은 <strong>연산 장치에 맞는 빌드</strong>를 고르는 것입니다.</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># [CPU 경로] CPU 전용 빌드: 용량이 작고 GPU 드라이버가 필요 없음
-python -m pip install -r requirements/cpu.txt
-</code></pre></div>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># [GT 1030 경로] 1) 드라이버 확인: 570 이상이어야 함
-nvidia-smi
-
-# 2) Pascal을 지원하는 CUDA 12.6 빌드의 마지막 버전(2.14)으로 고정
-python -m pip install -r requirements/gt1030.txt
-</code></pre></div>
-<p>GT 1030 경로에서 버전을 고정하는 이유는 분명합니다. PyTorch는 최신 CUDA 빌드에서 Pascal 세대 지원을 제외했고, Pascal을 지원하던 CUDA 12.6 빌드도 2.15부터 배포를 멈췄습니다. 버전을 고정하지 않고 최신판을 설치하면, GPU가 있어도 PyTorch가 그 GPU를 쓰지 못합니다. 다음 절의 장치 선택 함수가 이 상황을 자동으로 잡아냅니다.</p>
-</section><section class="section" id="s07"><h2><span class="num">07</span>장치 자동 선택</h2><p>같은 실습 코드가 CPU와 GT 1030 어디서든 그대로 실행되어야 합니다. 그래서 모든 장은 장치를 직접 적지 않고, 공통 함수 <code>select_device()</code>에 묻습니다.</p>
-<p>파일명: <code>examples/common/device.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 모든 장이 공유하는 장치·연산 자료형 선택 모듈
-#
-# 판단 순서
-#   1. GPU(CUDA)를 쓸 수 있는가
-#   2. 설치된 PyTorch가 이 GPU 세대(Compute Capability)를 지원하는가
-#   3. 이 GPU에서 빠르고 안전한 연산 자료형은 무엇인가
-
-import torch
-
-
-def select_device(verbose: bool = True):
-    &quot;&quot;&quot;사용할 장치 이름과 연산 자료형을 함께 돌려준다.
-
-    반환값: (device, dtype)
-        device: &quot;cuda&quot; 또는 &quot;cpu&quot;
-        dtype : torch.float32 / torch.float16 / torch.bfloat16
-    &quot;&quot;&quot;
-    if torch.cuda.is_available():
-        major, minor = torch.cuda.get_device_capability(0)
-        arch = f&quot;sm_{major}{minor}&quot;
-
-        # PyTorch 빌드에 이 세대의 GPU 코드가 들어 있어야 실제 연산이 가능하다.
-        if arch in torch.cuda.get_arch_list():
-            if major &gt;= 8:
-                # Ampere 이후: BF16 고속 연산 지원
-                return &quot;cuda&quot;, torch.bfloat16
-            if major == 7:
-                # Volta·Turing: FP16 고속 연산 지원, BF16 미지원
-                return &quot;cuda&quot;, torch.float16
-            # Pascal 이전(GT 1030 = sm_61): FP16이 FP32의 1/64 속도이므로 FP32 사용
-            return &quot;cuda&quot;, torch.float32
-
-        if verbose:
-            print(f&quot;[device] {arch} GPU를 설치된 PyTorch가 지원하지 않아 CPU를 사용합니다.&quot;)
-
-    return &quot;cpu&quot;, torch.float32
-</code></pre></div>
-<p>함수가 내리는 판단은 세 단계입니다.</p>
+<p>이 설정은 제44·45장에서 결정적으로 중요해집니다. Instruct 모델에서는 PAD와 EOS가 서로 다른 토큰이므로, 길이 맞춤용 PAD를 학습에서 제외해도 EOS는 그대로 학습됩니다. 만약 둘이 같은 토큰이었다면 PAD를 제외하는 순간 EOS도 함께 지워져, 모델이 멈추는 법을 배우지 못합니다. 제07장에서 확인한 &quot;끝을 배워야 멈춘다&quot;는 원리가 여기서 다시 등장합니다.</p>
+</section><section class="section" id="s04"><h2><span class="num">04</span>AutoTokenizer와 한글·영문 비교</h2><p>Hugging Face의 <code>AutoTokenizer</code>는 모델 이름만 주면 그 모델에 맞는 토크나이저를 자동으로 불러옵니다. 모델 파일과 마찬가지로 교재가 고정한 Revision으로 불러와, 토큰화 결과가 바뀌지 않게 합니다.</p>
 <table>
 <thead>
 <tr>
-  <th>단계</th>
-  <th>질문</th>
-  <th>아니라면</th>
+  <th>함수</th>
+  <th>하는 일</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>1</td>
-  <td>GPU를 쓸 수 있는가(<code>is_available</code>)</td>
-  <td>CPU, FP32</td>
+  <td><code>from_pretrained()</code></td>
+  <td>이름과 Revision으로 토크나이저 불러오기</td>
 </tr>
 <tr>
-  <td>2</td>
-  <td>설치된 PyTorch가 이 GPU 세대를 지원하는가(<code>get_arch_list</code>)</td>
-  <td>이유를 출력하고 CPU, FP32</td>
+  <td><code>encode()</code></td>
+  <td>문장 → Token ID 목록</td>
 </tr>
 <tr>
-  <td>3</td>
-  <td>GPU 세대 번호(<code>major</code>)에 맞는 자료형은 무엇인가</td>
-  <td>8 이상 BF16, 7은 FP16, 그 밖은 FP32</td>
+  <td><code>decode()</code></td>
+  <td>Token ID 목록 → 문장</td>
+</tr>
+<tr>
+  <td><code>convert_tokens_to_ids()</code></td>
+  <td>토큰 문자열 → ID</td>
 </tr>
 </tbody>
 </table>
-<p>두 함수는 모두 <code>torch.cuda</code> 안에 있습니다.</p>
-<p>2단계가 이 함수의 핵심입니다. <code>is_available()</code>만 확인하면 GPU가 있다고 판단하지만, 실제 연산을 시작하는 순간 &quot;지원하지 않는 아키텍처&quot; 오류로 멈춥니다. GT 1030 사용자가 가장 자주 만나는 함정을 미리 막는 장치입니다.</p>
-</section><section class="section" id="s08"><h2><span class="num">08</span>Ollama로 첫 로컬 LLM 실행</h2><p>Ollama는 내려받은 LLM을 명령 한 줄로 실행해 주는 로컬 실행기입니다. 내부적으로 llama.cpp를 사용하며, 모델을 GGUF(가중치를 한 파일에 담는 형식) 파일로 관리합니다. 제6부에서 우리가 직접 학습한 모델도 이 길을 따라 배포됩니다.</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># Ollama 설치(공식 설치 스크립트): 설치 후 백그라운드 서버가 자동 실행됨
-curl -fsSL https://ollama.com/install.sh | sh
-
-# 설치 확인
-ollama --version
-
-# 이 교재의 기본 모델 받기(약 400MB)
-ollama pull qwen2.5:0.5b
-
-# 대화형 실행: 질문을 입력하고, 끝낼 때는 /bye
-ollama run qwen2.5:0.5b
-</code></pre></div>
-<p>GT 1030 사용자는 다음 명령으로 모델이 GPU에 올라갔는지 확인합니다. <code>PROCESSOR</code> 열이 <code>100% GPU</code>이면 모델 전체가 VRAM에서 실행되고 있다는 뜻입니다.</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># 실행 중인 모델과 적재 위치 확인
-ollama ps
-</code></pre></div>
-<p>Ollama는 실행과 동시에 <code>127.0.0.1:11434</code>에서 HTTP API(프로그램끼리 요청을 주고받는 창구) 서버를 엽니다. 대화창 대신 Python 코드로 질문을 보내면, 응답과 함께 <strong>생성 통계</strong>를 숫자로 받을 수 있습니다. 다음 절의 핵심 실습은 바로 이 통계를 이용합니다.</p>
-</section><section class="section" id="s09"><h2><span class="num">09</span>핵심 실습</h2><p>두 개의 스크립트로 이 장의 결론을 직접 확인합니다. 첫째, 실습 환경이 준비되었는지 보고서로 남깁니다. 둘째, 로컬 LLM이 실제로 &quot;토큰을 하나씩 생성&quot;한다는 사실을 생성 속도로 측정합니다.</p>
-<h3>실습 1. 환경 점검 보고서</h3>
-<p>파일명: <code>examples/ch01/check_env.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제01장 핵심 실습 1: 로컬 실습 환경 점검 보고서
+<p><code>from_pretrained()</code>는 <code>AutoTokenizer</code>에서, 나머지는 불러온 토크나이저 객체에서 호출합니다.</p>
+<h3>같은 의미, 다른 토큰 수</h3>
+<p>Qwen2.5의 어휘에는 영어 단어 조각이 통째로 많이 들어 있습니다(제09장에서 병합 규칙으로 확인). 그래서 같은 뜻의 문장이라도 언어에 따라 필요한 토큰 수가 다릅니다. 핵심 실습에서 직접 세어 보면 영문 문장은 41글자가 토큰 8개가 되지만, 한글 문장은 19글자가 토큰 16개가 됩니다.</p>
+<p>토큰 수의 차이는 실제 비용의 차이입니다. 같은 내용을 담은 한글 데이터는 더 긴 시퀀스가 되어, 학습 메모리(제02장의 Logits)와 생성 시간(제01장의 tokens/s)을 더 많이 씁니다. 제41장에서 한글 도메인 데이터를 설계할 때 최대 시퀀스 길이를 정하는 근거가 됩니다.</p>
+</section><section class="section" id="s05"><h2><span class="num">05</span>핵심 실습</h2><p>Qwen2.5 토크나이저를 불러와 특수 토큰을 확인하고, 한글·영문 문장을 토큰화했다가 되돌립니다.</p>
+<p>파일명: <code>examples/ch08/tokenize_compare.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제08장 핵심 실습: Qwen2.5 토크나이저로 한글·영문 문장을 토큰화하고 되돌리기
 #
-# 실행: python examples/ch01/check_env.py
-# 결과: 화면 보고서 + examples/ch01/env_report.json
+# 실행: python examples/ch08/tokenize_compare.py
+# 준비: 처음 실행할 때 토크나이저 파일(수 MB)을 내려받는다.
 
-import json
-import os
-import platform
 import sys
 from pathlib import Path
 
-# examples/common 모듈을 불러오기 위해 상위 폴더(examples)를 검색 경로에 추가한다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import torch  # noqa: E402
-from common.device import select_device  # noqa: E402
+from transformers import AutoTokenizer  # noqa: E402
+
+from common.models import QWEN_ID, QWEN_REVISION  # noqa: E402
+
+SENTENCES = [
+    &quot;언어 모델은 다음 토큰을 예측한다.&quot;,
+    &quot;A language model predicts the next token.&quot;,
+]
 
 
-def read_total_ram_gib() -&gt; float:
-    &quot;&quot;&quot;Linux의 /proc/meminfo에서 전체 메모리를 GiB 단위로 읽는다.&quot;&quot;&quot;
-    try:
-        with open(&quot;/proc/meminfo&quot;, encoding=&quot;utf-8&quot;) as f:
-            for line in f:
-                if line.startswith(&quot;MemTotal:&quot;):
-                    kib = int(line.split()[1])
-                    return round(kib / 1024 / 1024, 1)
-    except OSError:
-        pass
-    return -1.0
+def load_tokenizer(local_only: bool = False):
+    return AutoTokenizer.from_pretrained(QWEN_ID, revision=QWEN_REVISION,
+                                         local_files_only=local_only)
 
 
-def collect_report() -&gt; dict:
-    &quot;&quot;&quot;환경 정보를 사전(dict) 하나로 모은다.&quot;&quot;&quot;
-    device, dtype = select_device(verbose=False)
-
-    report = {
-        &quot;os&quot;: platform.platform(),
-        &quot;python&quot;: platform.python_version(),
-        &quot;torch&quot;: torch.__version__,
-        &quot;torch_cuda_build&quot;: torch.version.cuda,      # CPU 전용 빌드면 None
-        &quot;cpu_cores&quot;: os.cpu_count(),
-        &quot;ram_gib&quot;: read_total_ram_gib(),
-        &quot;device&quot;: device,
-        &quot;dtype&quot;: str(dtype).replace(&quot;torch.&quot;, &quot;&quot;),
-        &quot;gpu&quot;: None,
+def split_three_ways(text: str, tok) -&gt; dict:
+    &quot;&quot;&quot;같은 문장을 문자·단어·서브워드 단위로 나눈 개수.&quot;&quot;&quot;
+    return {
+        &quot;문자&quot;: len(text),
+        &quot;단어(공백 기준)&quot;: len(text.split()),
+        &quot;서브워드(Qwen)&quot;: len(tok.encode(text)),
     }
-
-    if device == &quot;cuda&quot;:
-        props = torch.cuda.get_device_properties(0)
-        free_b, total_b = torch.cuda.mem_get_info(0)
-        report[&quot;gpu&quot;] = {
-            &quot;name&quot;: props.name,
-            &quot;compute_capability&quot;: f&quot;{props.major}.{props.minor}&quot;,
-            &quot;vram_total_mib&quot;: total_b // 2**20,
-            &quot;vram_free_mib&quot;: free_b // 2**20,
-            &quot;bf16_fast&quot;: props.major &gt;= 8,
-        }
-    return report
-
-
-def smoke_test(device: str, dtype: torch.dtype) -&gt; float:
-    &quot;&quot;&quot;선택한 장치에서 작은 행렬곱을 실행해 결과를 CPU FP32 계산과 비교한다.&quot;&quot;&quot;
-    torch.manual_seed(0)
-    a = torch.randn(64, 64)
-    b = torch.randn(64, 64)
-    expected = a @ b
-    actual = (a.to(device, dtype) @ b.to(device, dtype)).float().cpu()
-    return (actual - expected).abs().max().item()
 
 
 def main() -&gt; None:
-    report = collect_report()
-    dtype = getattr(torch, report[&quot;dtype&quot;])
-    report[&quot;smoke_test_max_abs_error&quot;] = smoke_test(report[&quot;device&quot;], dtype)
+    tok = load_tokenizer()
 
-    print(&quot;=== 로컬 실습 환경 점검 ===&quot;)
-    for key, value in report.items():
-        print(f&quot;{key:&gt;24} : {value}&quot;)
+    print(&quot;── 1. 어휘 집합과 특수 토큰 ──&quot;)
+    print(f&quot;일반 토큰 수: {tok.vocab_size:,},  특수 토큰 포함 전체: {len(tok):,}&quot;)
+    print(f&quot;BOS: {tok.bos_token},  EOS: {tok.eos_token} ({tok.eos_token_id}),  &quot;
+          f&quot;PAD: {tok.pad_token} ({tok.pad_token_id})&quot;)
+    for name in (&quot;&lt;|im_start|&gt;&quot;, &quot;&lt;|im_end|&gt;&quot;, &quot;&lt;|endoftext|&gt;&quot;):
+        print(f&quot;  {name:&lt;15} → ID {tok.convert_tokens_to_ids(name)}&quot;)
 
-    out = Path(__file__).with_name(&quot;env_report.json&quot;)
-    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding=&quot;utf-8&quot;)
-    print(f&quot;\n보고서 저장: {out.name}&quot;)
+    print(&quot;\n── 2. 문장 토큰화와 되돌리기 ──&quot;)
+    for text in SENTENCES:
+        ids = tok.encode(text)
+        pieces = [tok.decode([i]) for i in ids]
+        print(f&quot;\n문장: {text}&quot;)
+        print(f&quot;  Token ID ({len(ids)}개): {ids}&quot;)
+        print(f&quot;  토큰별 글자: {pieces}&quot;)
+        print(f&quot;  디코딩 결과가 원문과 같은가: {tok.decode(ids) == text}&quot;)
+
+    print(&quot;\n── 3. 문자·단어·서브워드 개수 비교 ──&quot;)
+    for text in SENTENCES:
+        counts = split_three_ways(text, tok)
+        print(f&quot;  {text[:20]:&lt;22}&quot; + &quot;  &quot;.join(f&quot;{k} {v}&quot; for k, v in counts.items()))
 
 
 if __name__ == &quot;__main__&quot;:
     main()
 </code></pre></div>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># 저장소 루트에서 실행
-python examples/ch01/check_env.py
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># 처음 실행할 때 토크나이저 파일을 내려받습니다.
+python examples/ch08/tokenize_compare.py
 </code></pre></div>
-<p>실제 실행 결과(CPU 경로, 교재 검증 환경):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>=== 로컬 실습 환경 점검 ===
-                      os : Linux-6.18.44-fc-v819-x86_64-with-glibc2.39
-                  python : 3.13.18
-                   torch : 2.15.0+cpu
-        torch_cuda_build : None
-               cpu_cores : 2
-                 ram_gib : 7.8
-                  device : cpu
-                   dtype : float32
-                     gpu : None
-smoke_test_max_abs_error : 0.0
+<p>실제 실행 결과(교재 검증 환경):</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 1. 어휘 집합과 특수 토큰 ──
+일반 토큰 수: 151,643,  특수 토큰 포함 전체: 151,665
+BOS: None,  EOS: &lt;|im_end|&gt; (151645),  PAD: &lt;|endoftext|&gt; (151643)
+  &lt;|im_start|&gt;    → ID 151644
+  &lt;|im_end|&gt;      → ID 151645
+  &lt;|endoftext|&gt;   → ID 151643
 
-보고서 저장: env_report.json
-</code></pre></div>
-<p>GT 1030 경로의 예상 출력(교재 검증 환경에서 미검증):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>                   torch : 2.14.0+cu126
-        torch_cuda_build : 12.6
-                  device : cuda
-                   dtype : float32
-                     gpu : {'name': 'NVIDIA GeForce GT 1030', 'compute_capability': '6.1', 'vram_total_mib': (약 2000), 'vram_free_mib': (실측값), 'bf16_fast': False}
-</code></pre></div>
-<p><strong>핵심 코드 풀이</strong></p>
-<ul>
-<li><code>collect_report()</code>는 운영체제·Python·PyTorch 버전과 <code>select_device()</code>의 판단 결과를 한 사전에 모읍니다. GPU를 쓸 때만 이름·세대·VRAM을 추가합니다.</li>
-<li><code>torch.cuda.mem_get_info(0)</code>는 지금 이 순간 비어 있는 VRAM과 전체 VRAM을 바이트 단위로 돌려줍니다. 화면 출력에 GPU를 쓰고 있다면 비어 있는 양이 눈에 띄게 줄어듭니다.</li>
-<li><code>smoke_test()</code>는 선택된 장치에서 64×64 행렬곱을 실제로 실행하고, CPU FP32 결과와의 최대 차이를 잽니다. 장치가 &quot;있다&quot;는 것을 넘어 &quot;제대로 계산한다&quot;는 것을 확인하는 단계입니다.</li>
-<li>보고서는 <code>env_report.json</code>으로 저장됩니다. 앞으로 문제가 생기면 이 파일이 가장 먼저 확인할 기준 기록이 됩니다.</li>
-</ul>
-<h3>실습 2. 로컬 LLM 질의와 생성 속도 측정</h3>
-<p>파일명: <code>examples/ch01/ollama_generate.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제01장 핵심 실습 2: Ollama API로 로컬 LLM에 질문하고 생성 속도 측정
-#
-# 준비: ollama pull qwen2.5:0.5b  (Ollama 서버가 실행 중이어야 한다)
-# 실행: python examples/ch01/ollama_generate.py &quot;질문&quot;
+── 2. 문장 토큰화와 되돌리기 ──
 
-import json
-import sys
-import urllib.error
-import urllib.request
+문장: 언어 모델은 다음 토큰을 예측한다.
+  Token ID (16개): [129709, 31079, 54070, 142713, 33704, 126844, 10764, 228, 57160, 223, 108, 17877, 95617, 132612, 51876, 13]
+  토큰별 글자: ['언', '어', ' 모', '델', '은', ' 다음', ' �', '�', '��', '�', '�', '을', ' 예', '측', '한다', '.']
+  디코딩 결과가 원문과 같은가: True
 
-OLLAMA_URL = &quot;http://127.0.0.1:11434/api/generate&quot;
-MODEL = &quot;qwen2.5:0.5b&quot;
+문장: A language model predicts the next token.
+  Token ID (8개): [32, 4128, 1614, 55878, 279, 1790, 3950, 13]
+  토큰별 글자: ['A', ' language', ' model', ' predicts', ' the', ' next', ' token', '.']
+  디코딩 결과가 원문과 같은가: True
 
-
-def generate(prompt: str, url: str = OLLAMA_URL, model: str = MODEL,
-             timeout: float = 120.0) -&gt; dict:
-    &quot;&quot;&quot;프롬프트 하나를 보내고 응답 JSON 전체를 돌려준다.
-
-    temperature 0과 고정 seed로 같은 질문에 같은 답이 나오게 한다(재현성).
-    &quot;&quot;&quot;
-    payload = {
-        &quot;model&quot;: model,
-        &quot;prompt&quot;: prompt,
-        &quot;stream&quot;: False,
-        &quot;options&quot;: {&quot;temperature&quot;: 0, &quot;seed&quot;: 42},
-    }
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode(&quot;utf-8&quot;),
-        headers={&quot;Content-Type&quot;: &quot;application/json&quot;},
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode(&quot;utf-8&quot;))
-
-
-def tokens_per_second(result: dict) -&gt; float:
-    &quot;&quot;&quot;생성 토큰 수(eval_count)를 생성 시간(eval_duration, 나노초)으로 나눈다.&quot;&quot;&quot;
-    duration_ns = result.get(&quot;eval_duration&quot;, 0)
-    if duration_ns &lt;= 0:
-        return 0.0
-    return result.get(&quot;eval_count&quot;, 0) / (duration_ns / 1e9)
-
-
-def main() -&gt; None:
-    prompt = sys.argv[1] if len(sys.argv) &gt; 1 else &quot;LLM을 한 문장으로 설명해 주세요.&quot;
-    try:
-        result = generate(prompt)
-    except urllib.error.URLError as error:
-        print(f&quot;Ollama 서버에 연결할 수 없습니다: {error.reason}&quot;)
-        print(&quot;확인: 'ollama serve' 실행 여부, 'ollama pull qwen2.5:0.5b' 완료 여부&quot;)
-        sys.exit(1)
-
-    print(&quot;=== 응답 ===&quot;)
-    print(result.get(&quot;response&quot;, &quot;&quot;).strip())
-    print(&quot;\n=== 생성 통계 ===&quot;)
-    print(f&quot;입력 토큰 수   : {result.get('prompt_eval_count', 0)}&quot;)
-    print(f&quot;생성 토큰 수   : {result.get('eval_count', 0)}&quot;)
-    print(f&quot;초당 생성 토큰 : {tokens_per_second(result):.1f} tokens/s&quot;)
-
-
-if __name__ == &quot;__main__&quot;:
-    main()
-</code></pre></div>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># Ollama 서버가 켜져 있는 상태에서 실행
-python examples/ch01/ollama_generate.py &quot;LLM을 한 문장으로 설명해 주세요.&quot;
-</code></pre></div>
-<p>예상 출력 형식(응답 문장과 숫자는 장치·버전에 따라 달라짐, 교재 검증 환경에서 미검증):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>=== 응답 ===
-(모델이 생성한 한 문장)
-
-=== 생성 통계 ===
-입력 토큰 수   : (질문의 토큰 수)
-생성 토큰 수   : (응답의 토큰 수)
-초당 생성 토큰 : (장치별 측정값) tokens/s
+── 3. 문자·단어·서브워드 개수 비교 ──
+  언어 모델은 다음 토큰을 예측한다.   문자 19  단어(공백 기준) 5  서브워드(Qwen) 16
+  A language model pre  문자 41  단어(공백 기준) 7  서브워드(Qwen) 8
 </code></pre></div>
 <p><strong>핵심 코드 풀이</strong></p>
 <ul>
-<li><code>payload</code>의 <code>&quot;stream&quot;: False</code>는 응답을 토큰 단위로 나눠 받지 않고 한 번에 받겠다는 뜻입니다. 토큰 단위 수신(Streaming)은 제57장에서 다룹니다.</li>
-<li><code>&quot;temperature&quot;: 0</code>과 고정 <code>&quot;seed&quot;</code>는 매번 가장 확률 높은 토큰을 고르게 해, 같은 질문에 같은 답이 나오도록 합니다. 결과를 비교·검증하려면 생성이 재현되어야 하기 때문입니다.</li>
-<li>응답 JSON의 <code>eval_count</code>는 생성한 토큰 수, <code>eval_duration</code>은 생성에 걸린 시간(나노초)입니다. 둘을 나눈 값이 초당 생성 토큰 수입니다.</li>
-<li>이 숫자가 바로 02절의 &quot;한 걸음씩 반복하는 생성&quot;을 눈으로 보여 주는 증거입니다. 답이 길어질수록 생성 토큰 수와 시간이 함께 늘어납니다.</li>
-<li>연결에 실패하면 원인을 짐작할 수 있는 안내를 출력하고 종료합니다. 오류를 숨기지 않고 이유를 드러내는 것이 실습 코드의 기본 원칙입니다.</li>
+<li><code>load_tokenizer()</code>는 공통 모듈의 <code>QWEN_ID</code>와 <code>QWEN_REVISION</code>으로 토크나이저를 불러옵니다. 제05장의 모델 파일과 같은 Revision이므로 모델과 토크나이저가 어긋날 일이 없습니다.</li>
+<li>1번에서 BOS가 <code>None</code>인 것을 확인합니다. 테스트의 <code>tok.encode(&quot;Hello&quot;) == [9707]</code>도 같은 사실을 검증합니다. 문장 앞에 아무 토큰도 자동으로 붙지 않습니다.</li>
+<li>2번의 <code>[tok.decode([i]) for i in ids]</code>는 토큰을 하나씩 따로 글자로 되돌려, 문장이 어디서 잘렸는지 보여 줍니다.</li>
+<li><code>split_three_ways()</code>는 03절의 세 가지 단위로 같은 문장을 나눠 개수를 셉니다. 공백 기준 단어 수는 <code>split()</code>으로 세는 단순 근사입니다.</li>
 </ul>
-<p><strong>확인 과제:</strong> 짧은 질문과 &quot;다섯 문장으로 설명해 주세요&quot; 같은 긴 답변 요청을 각각 보내 보세요. 생성 토큰 수는 크게 달라지지만 초당 생성 토큰 수는 비슷하게 유지됩니다. 생성 속도는 문장의 길이가 아니라 <strong>장치와 모델 크기</strong>가 결정한다는 뜻입니다.</p>
-</section><section class="section" id="s10"><h2><span class="num">10</span>검증과 완료 기준</h2><p>실습이 의도대로 동작하는지 테스트 코드로 확인합니다. 테스트는 실제 GPU나 Ollama가 없어도 실행되도록 **모의 실험(mock, 실제 대상을 흉내 내는 가짜 객체)**을 사용합니다. 장치 선택은 다섯 가지 GPU 상황을 흉내 내 판단을 검사하고, Ollama 클라이언트는 작은 가짜 서버를 띄워 요청·응답을 검사합니다.</p>
-<p>파일명: <code>examples/ch01/test_ch01.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제01장 검증 테스트
+<p><strong>결과 읽기</strong></p>
+<ul>
+<li>영문 문장은 거의 단어 하나가 토큰 하나입니다(<code>' language'</code>, <code>' model'</code>). 앞의 공백이 토큰에 붙어 있다는 점도 눈여겨보세요. 서브워드 토크나이저는 공백까지 토큰의 일부로 다룹니다.</li>
+<li>한글 문장에서 '언', '어'처럼 자주 나오는 글자는 한 글자가 한 토큰이고, <code>' 다음'</code>, <code>'한다'</code>처럼 자주 쓰이는 묶음은 여러 글자가 한 토큰입니다.</li>
+<li>눈여겨볼 것은 &quot;토큰&quot; 부분입니다. <code>' �'</code>, <code>'�'</code>, <code>'��'</code>처럼 깨진 글자로 표시되는 토큰 5개가 됩니다. 한글 한 글자는 컴퓨터 안에서 3바이트(UTF-8)인데, 이 토크나이저는 어휘에 없는 글자를 <strong>바이트 단위로</strong> 쪼개 표현하기 때문입니다. 토큰 하나만 따로 되돌리면 글자의 일부 바이트뿐이라 깨져 보이지만, 전체를 함께 되돌리면 &quot;토큰&quot;으로 정확히 복원됩니다. 마지막 줄의 <code>True</code>가 그 증거입니다. 이 바이트 단위 방식이 제09장의 Byte-level BPE입니다.</li>
+<li>3번 표의 토큰 수를 글자 수로 나누면 한글은 약 0.84, 영문은 약 0.20입니다. 같은 뜻을 전달하는 데 한글 문장이 토큰을 두 배 사용했습니다.</li>
+</ul>
+</section><section class="section" id="s06"><h2><span class="num">06</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch08/test_ch08.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제08장 검증 테스트
 #
-# 실행: python -m pytest examples/ch01 -q
-#
-# 실제 GPU나 Ollama가 없어도 실행되도록, 장치 상태와 Ollama 서버를 모의(mock)로 흉내 낸다.
+# 실행: python -m pytest examples/ch08 -q
+# 토크나이저 파일이 이미 내려받아져 있을 때만 실행한다.
 
-import json
 import sys
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
-import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common.device import select_device  # noqa: E402
-import check_env  # noqa: E402
-import ollama_generate  # noqa: E402
+from tokenize_compare import SENTENCES, load_tokenizer, split_three_ways  # noqa: E402
 
 
-# ── 1. 장치 선택 모의 실험 ──────────────────────────────────────────────
-
-def fake_gpu(monkeypatch, available, capability=(6, 1), arch_list=(&quot;sm_61&quot;,)):
-    &quot;&quot;&quot;torch.cuda의 판단 함수를 바꿔 원하는 GPU 상황을 흉내 낸다.&quot;&quot;&quot;
-    monkeypatch.setattr(torch.cuda, &quot;is_available&quot;, lambda: available)
-    monkeypatch.setattr(torch.cuda, &quot;get_device_capability&quot;, lambda i=0: capability)
-    monkeypatch.setattr(torch.cuda, &quot;get_arch_list&quot;, lambda: list(arch_list))
-
-
-@pytest.mark.parametrize(
-    &quot;available, capability, arch_list, expected&quot;,
-    [
-        (False, (0, 0), (), (&quot;cpu&quot;, torch.float32)),                     # GPU 없음
-        (True, (6, 1), (&quot;sm_75&quot;, &quot;sm_80&quot;), (&quot;cpu&quot;, torch.float32)),      # GT 1030 + 미지원 빌드
-        (True, (6, 1), (&quot;sm_61&quot;, &quot;sm_75&quot;), (&quot;cuda&quot;, torch.float32)),     # GT 1030 + cu126 빌드
-        (True, (7, 5), (&quot;sm_75&quot;,), (&quot;cuda&quot;, torch.float16)),             # Turing
-        (True, (8, 6), (&quot;sm_86&quot;,), (&quot;cuda&quot;, torch.bfloat16)),            # Ampere
-    ],
-)
-def test_select_device(monkeypatch, available, capability, arch_list, expected):
-    fake_gpu(monkeypatch, available, capability, arch_list)
-    assert select_device(verbose=False) == expected
-
-
-# ── 2. 환경 보고서 ──────────────────────────────────────────────────────
-
-def test_report_has_required_fields():
-    report = check_env.collect_report()
-    for key in (&quot;os&quot;, &quot;python&quot;, &quot;torch&quot;, &quot;device&quot;, &quot;dtype&quot;, &quot;ram_gib&quot;):
-        assert key in report
-
-
-def test_smoke_test_on_selected_device():
-    device, dtype = select_device(verbose=False)
-    error = check_env.smoke_test(device, dtype)
-    # FP32는 거의 0, 16비트 자료형은 정밀도가 낮아 기준을 넓게 잡는다.
-    limit = 1e-4 if dtype == torch.float32 else 0.5
-    assert error &lt;= limit
-
-
-# ── 3. Ollama API 클라이언트(모의 서버) ─────────────────────────────────
-
-FAKE_RESPONSE = {
-    &quot;model&quot;: &quot;qwen2.5:0.5b&quot;,
-    &quot;response&quot;: &quot;LLM은 다음 토큰을 예측하는 언어 모델입니다.&quot;,
-    &quot;done&quot;: True,
-    &quot;prompt_eval_count&quot;: 12,
-    &quot;eval_count&quot;: 20,
-    &quot;eval_duration&quot;: 500_000_000,   # 0.5초(나노초 단위)
-}
-
-
-class FakeOllama(BaseHTTPRequestHandler):
-    received = {}
-
-    def do_POST(self):
-        length = int(self.headers[&quot;Content-Length&quot;])
-        FakeOllama.received = json.loads(self.rfile.read(length))
-        body = json.dumps(FAKE_RESPONSE).encode(&quot;utf-8&quot;)
-        self.send_response(200)
-        self.send_header(&quot;Content-Type&quot;, &quot;application/json&quot;)
-        self.send_header(&quot;Content-Length&quot;, str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, *args):
-        pass
-
-
-def test_generate_with_fake_server():
-    server = HTTPServer((&quot;127.0.0.1&quot;, 0), FakeOllama)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+@pytest.fixture(scope=&quot;module&quot;)
+def tok():
     try:
-        url = f&quot;http://127.0.0.1:{server.server_port}/api/generate&quot;
-        result = ollama_generate.generate(&quot;테스트&quot;, url=url)
-    finally:
-        server.shutdown()
-
-    # 요청: 재현성 설정(temperature 0, seed 고정)이 실제로 전송되었는가
-    assert FakeOllama.received[&quot;stream&quot;] is False
-    assert FakeOllama.received[&quot;options&quot;] == {&quot;temperature&quot;: 0, &quot;seed&quot;: 42}
-    # 응답: 20개 토큰 / 0.5초 = 40 tokens/s
-    assert result[&quot;response&quot;] == FAKE_RESPONSE[&quot;response&quot;]
-    assert ollama_generate.tokens_per_second(result) == pytest.approx(40.0)
+        return load_tokenizer(local_only=True)
+    except Exception:
+        pytest.skip(&quot;토크나이저가 아직 내려받아지지 않음(tokenize_compare.py를 먼저 실행)&quot;)
 
 
-def test_tokens_per_second_zero_duration():
-    assert ollama_generate.tokens_per_second({&quot;eval_count&quot;: 5, &quot;eval_duration&quot;: 0}) == 0.0
+def test_vocab_sizes(tok):
+    assert tok.vocab_size == 151_643
+    assert len(tok) == 151_665          # 일반 토큰 + 특수 토큰
+    assert len(tok) &lt;= 151_936          # 모델 Embedding 행 수(config.json의 vocab_size) 이내
+
+
+def test_special_tokens(tok):
+    assert tok.bos_token is None        # Qwen2.5는 BOS를 쓰지 않는다
+    assert tok.eos_token == &quot;&lt;|im_end|&gt;&quot; and tok.eos_token_id == 151_645
+    assert tok.pad_token == &quot;&lt;|endoftext|&gt;&quot; and tok.pad_token_id == 151_643
+    assert tok.pad_token_id != tok.eos_token_id
+
+
+def test_no_token_added_automatically(tok):
+    # 문장 앞뒤에 특수 토큰이 자동으로 붙지 않는다: &quot;Hello&quot; 한 단어 → 토큰 1개
+    assert tok.encode(&quot;Hello&quot;) == [9707]
+
+
+@pytest.mark.parametrize(&quot;text&quot;, SENTENCES + [&quot;안녕하세요&quot;, &quot;FPGA와 LLM 🙂&quot;])
+def test_round_trip(tok, text):
+    assert tok.decode(tok.encode(text)) == text
+
+
+def test_korean_needs_more_tokens_per_character(tok):
+    ko, en = (split_three_ways(s, tok) for s in SENTENCES)
+    assert ko[&quot;서브워드(Qwen)&quot;] / ko[&quot;문자&quot;] &gt; en[&quot;서브워드(Qwen)&quot;] / en[&quot;문자&quot;]
 </code></pre></div>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># pytest 설치 후 제01장 테스트 실행
-python -m pip install pytest
-python -m pytest examples/ch01 -q
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch08 -q
 </code></pre></div>
-<p>실제 실행 결과(CPU 경로, 교재 검증 환경):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>.........                                                                [100%]
-9 passed in 1.47s
+<p>실제 실행 결과(교재 검증 환경, 토크나이저 내려받은 상태):</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>........                                                                 [100%]
+8 passed in 1.87s
 </code></pre></div>
-<p>VS Code에서는 왼쪽 <strong>테스트</strong> 아이콘(플라스크 모양)을 눌러 같은 테스트를 하나씩 실행하고 결과를 확인할 수 있습니다.</p>
+<p>토크나이저를 아직 내려받지 않았다면 테스트는 건너뜀(skipped)으로 표시됩니다. <code>tokenize_compare.py</code>를 한 번 실행한 뒤 다시 테스트하세요.</p>
 <table>
 <thead>
 <tr>
@@ -1231,48 +924,45 @@ python -m pytest examples/ch01 -q
 </thead>
 <tbody>
 <tr>
-  <td>환경 보고서</td>
-  <td><code>env_report.json</code> 생성, 필수 항목 포함</td>
-  <td>통과(CPU 경로)</td>
-</tr>
-<tr>
-  <td>장치 계산 확인</td>
-  <td>행렬곱 최대 오차 1e-4 이하(FP32)</td>
-  <td>통과(CPU 경로, 오차 0.0)</td>
-</tr>
-<tr>
-  <td>장치 선택 판단</td>
-  <td>다섯 가지 GPU 상황 모의 실험 통과</td>
+  <td>어휘 크기</td>
+  <td>일반 151,643, 전체 151,665, 모델 Embedding 행 수 이내</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>Ollama 클라이언트</td>
-  <td>모의 서버로 요청 형식·속도 계산 검증</td>
+  <td>특수 토큰</td>
+  <td>BOS 없음, EOS·PAD ID 확인, PAD ≠ EOS</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>GT 1030 실제 실행</td>
-  <td><code>device: cuda</code>, <code>dtype: float32</code>, VRAM 표시</td>
-  <td>미검증(교재 검증 환경에 GPU 없음)</td>
+  <td>자동 추가 없음</td>
+  <td>&quot;Hello&quot; → 토큰 1개</td>
+  <td>통과</td>
 </tr>
 <tr>
-  <td>Ollama 실제 응답</td>
-  <td>응답 수신, 생성 토큰 수·속도 기록</td>
-  <td>미검증(학습자 환경에서 확인)</td>
+  <td>왕복 복원</td>
+  <td>한글·영문·이모지 포함 4개 문장 모두 원문과 일치</td>
+  <td>통과</td>
+</tr>
+<tr>
+  <td>한글·영문 비교</td>
+  <td>글자당 토큰 수가 한글 &gt; 영문</td>
+  <td>통과</td>
 </tr>
 </tbody>
 </table>
-<p><strong>완료 기준:</strong> 자신의 환경에서 <code>env_report.json</code>을 만들고, 테스트 9개를 모두 통과하며, Ollama 응답과 초당 생성 토큰 수를 기록하면 이 장을 마친 것입니다.</p>
-</section><section class="section" id="s11"><h2><span class="num">11</span>핵심 정리</h2><ul>
-<li>LLM은 앞 문맥으로 다음 토큰의 확률을 계산해 하나씩 고르는 일을 반복하는 모델입니다. 생성 속도를 tokens/s로 재는 이유도 여기에 있습니다.</li>
-<li>이 교재는 공개된 사전학습 모델 위에서 <strong>파인튜닝과 로컬 추론</strong>을 끝까지 완성하는 데 집중합니다.</li>
-<li>CPU와 GT 1030 두 경로 모두 FP32로 계산하며, 공통 함수 <code>select_device()</code>가 장치와 자료형을 자동으로 고릅니다.</li>
-<li>가상환경과 버전 고정은 &quot;같은 명령, 같은 결과&quot;를 보장하는 재현성의 출발점입니다.</li>
+<p>이 장의 실습은 장치에 관계없이 같은 결과가 나오므로, CPU와 GT 1030 경로 모두 위 결과가 기준입니다.</p>
+<p><strong>완료 기준:</strong> 자신이 고른 한글 문장과 영문 문장을 토큰화해 토큰 수를 비교하고, 바이트 단위로 쪼개진 토큰이 전체 디코딩에서 복원되는 것을 확인하며, 테스트 8개를 모두 통과하면 이 장을 마친 것입니다.</p>
+</section><section class="section" id="s07"><h2><span class="num">07</span>핵심 정리</h2><ul>
+<li>모델은 글자가 아니라 토크나이저가 만든 정수 ID를 봅니다. 토크나이저는 모델의 입구이자 출구입니다.</li>
+<li>서브워드 토큰화는 문자 단위(너무 긺)와 단어 단위(어휘 폭발) 사이의 균형점입니다.</li>
+<li>Qwen2.5는 BOS를 쓰지 않고, EOS(<code>&lt;|im_end|&gt;</code>)와 PAD(<code>&lt;|endoftext|&gt;</code>)가 서로 다른 토큰입니다.</li>
+<li>토크나이저 어휘는 151,665개, 모델 Embedding 행은 151,936개입니다. 계산 목적에 따라 구분해 씁니다.</li>
+<li>같은 뜻의 문장도 한글은 영문보다 토큰이 많이 필요하며, 이는 메모리와 생성 시간의 차이로 이어집니다.</li>
 </ul>
-<p><strong>다음 장 연결:</strong> 제02장에서는 오늘 고른 두 장치, CPU와 GPU가 행렬 연산을 어떻게 다르게 처리하는지 실측으로 비교하고, VRAM 2GB가 실제로 얼마만큼의 공간인지 측정합니다.</p>
+<p><strong>다음 장 연결:</strong> 토크나이저의 어휘는 누가, 어떻게 정했을까요? 제09장에서는 어휘를 만드는 알고리즘 BPE를 직접 구현해, &quot;자주 붙어 나오는 쌍을 합친다&quot;는 단순한 규칙이 어떻게 서브워드 어휘를 만들어 내는지 단계별로 확인합니다.</p>
 </section><div class="chapter-links" id="chapter-links"></div></main></div>
 <footer class="footer">LLM 파인튜닝 및 로컬 AI 구현 · v01  · 실습 결과는 실제 환경에서 검증</footer>
-<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v01.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v01.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v01.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v01.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v01.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v01.html"}]};</script><script>/*
+<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v02.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v01.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v01.html"}]};</script><script>/*
  * 교육용 HTML 공통 동작 — 유지보수용 원본 (STANDARD 4·10.3·10.4)
  * 페이지 본문은 바꾸지 않고 탐색·이전/다음·모바일 메뉴·코드 복사만 덧붙인다.
  * 입력: 페이지의 window.COURSE (tools/guide/build_guides.py가 실제 존재하는 장만 넣음),

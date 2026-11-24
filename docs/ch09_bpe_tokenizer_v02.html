@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="토큰·어휘 집합 → 문자·단어·서브워드 → 특수 토큰 → Qwen2.5 토크나이저로 한글·영문 비교"><title>제08장 · Tokenizer와 Vocabulary · LLM 파인튜닝 및 로컬 AI 구현</title>
+<meta name="description" content="BPE의 아이디어 → 쌍 빈도와 병합 → 병합 규칙으로 인코딩 → Byte-level BPE → Qwen 병합 규칙 확인"><title>제09장 · BPE 토크나이저 직접 구현 · LLM 파인튜닝 및 로컬 AI 구현</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>/*
@@ -576,11 +576,11 @@ pre code {
     height: auto;
   }
 }
-</style></head><body data-chapter="ch08">
+</style></head><body data-chapter="ch09">
 <button type="button" class="mobile-menu" id="mobile-menu" aria-controls="course-nav" aria-expanded="false">☰ 장·목차</button><div class="shade" id="shade"></div>
-<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 08</p><h1>제08장 · Tokenizer와 Vocabulary</h1><p>토큰·어휘 집합 → 문자·단어·서브워드 → 특수 토큰 → Qwen2.5 토크나이저로 한글·영문 비교</p><div class="chips"><span class="chip">Tokenizer</span><span class="chip">Vocabulary</span><span class="chip">특수 토큰</span><span class="chip">AutoTokenizer</span><span class="chip">Qwen</span></div></div></header>
-<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제07장의 Bigram 모델은 글자 하나를 토큰으로 썼습니다. 실제 LLM은 다릅니다. 글자보다 크고 단어보다 작은 조각, **서브워드(Subword)**를 토큰으로 씁니다. 문장을 이 조각으로 자르고 번호를 붙이는 도구가 토크나이저(Tokenizer)입니다.</p>
-<p>모델은 글자를 보지 못합니다. 모델이 보는 것은 토크나이저가 건네준 <strong>정수 ID의 나열</strong>뿐입니다. 그래서 토크나이저는 모델의 눈이자 입구입니다. 이 장에서는 Qwen2.5의 실제 토크나이저로 한글과 영문 문장을 잘라 보고, 숫자가 된 문장이 다시 원래 문장으로 정확히 돌아오는지 확인합니다.</p>
+<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 09</p><h1>제09장 · BPE 토크나이저 직접 구현</h1><p>BPE의 아이디어 → 쌍 빈도와 병합 → 병합 규칙으로 인코딩 → Byte-level BPE → Qwen 병합 규칙 확인</p><div class="chips"><span class="chip">BPE</span><span class="chip">Merge Rule</span><span class="chip">Byte-level</span><span class="chip">UTF-8</span><span class="chip">Qwen</span></div></div></header>
+<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제08장에서 Qwen2.5의 토크나이저는 <code>&quot; model&quot;</code>이나 <code>&quot;한다&quot;</code>를 토큰 하나로, &quot;토큰&quot;이라는 단어는 바이트 조각 다섯 개로 잘랐습니다. 무엇을 한 토큰으로 묶고 무엇을 쪼갤지는 누가 정했을까요? 답은 사람이 아니라 <strong>데이터</strong>입니다.</p>
+<p>BPE(Byte Pair Encoding, 바이트 쌍 인코딩)는 &quot;가장 자주 붙어 나오는 두 조각을 하나로 합친다&quot;는 규칙 하나를 반복해 어휘를 만듭니다. 이 장에서는 BPE를 직접 구현해 병합이 한 번씩 일어날 때마다 어휘와 토큰열이 어떻게 바뀌는지 추적합니다. 그리고 실제 Qwen2.5의 어휘가 바로 이 방식으로 만들어졌음을 숫자로 확인합니다.</p>
 <table>
 <thead>
 <tr>
@@ -591,276 +591,355 @@ pre code {
 <tbody>
 <tr>
   <td>핵심 질문</td>
-  <td>문장은 어떻게 정수 ID가 되며, 한글과 영문은 왜 토큰 수가 다른가</td>
+  <td>서브워드 어휘는 어떻게 만들어지며, 새 문장은 어떻게 토큰으로 나뉘는가</td>
 </tr>
 <tr>
   <td>실습 결과물</td>
-  <td>Qwen2.5 토큰화 결과, 문자·단어·서브워드 개수 비교, 특수 토큰 표</td>
+  <td>병합 과정 추적표, 병합 횟수별 토큰 수, Qwen 병합 규칙 확인</td>
 </tr>
 <tr>
   <td>실습 파일</td>
-  <td><code>examples/ch08/</code>의 <code>tokenize_compare.py</code>, <code>test_ch08.py</code></td>
+  <td><code>examples/ch09/</code>의 <code>bpe.py</code>, <code>qwen_merges.py</code>, <code>test_ch09.py</code></td>
 </tr>
 <tr>
   <td>선수 장</td>
-  <td>제07장(토큰·어휘·특수 토큰의 개념)</td>
+  <td>제07장(학습 문장 <code>corpus.txt</code>), 제08장(서브워드·토크나이저)</td>
 </tr>
 </tbody>
 </table>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>&quot;언어 모델은 …&quot;  ──토크나이저(Encoding)──▶  [129709, 31079, 54070, …]  ──▶  모델
-       ▲                                                                       │
-       └──────────────토크나이저(Decoding)◀──  [다음 토큰 ID]  ◀─────────────────┘
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>[학습] 글자 단위로 시작 → 가장 잦은 쌍 찾기 → 합치기 → 반복 → 병합 규칙 목록
+   ↓
+[적용] 새 문장을 글자로 나눔 → 병합 규칙을 학습 순서대로 적용 → 토큰열
+   ↓
+[확장] 글자 대신 바이트에서 시작 → 어떤 문자도 표현 가능(Byte-level BPE)
+   ↓
+[확인] Qwen 어휘 151,643 = 바이트 256 + 병합 규칙 151,387
 </code></pre></div>
-</section><section class="section" id="s01"><h2><span class="num">01</span>토큰과 어휘 집합</h2><p>토크나이저가 하는 일은 사전 찾기와 비슷합니다. 미리 정해 둔 조각 목록, 즉 **어휘 집합(Vocabulary)**이 있고, 각 조각에는 고유 번호(Token ID)가 붙어 있습니다.</p>
+</section><section class="section" id="s01"><h2><span class="num">01</span>BPE의 아이디어</h2><p>BPE는 원래 데이터 압축 기법이었습니다. 자주 나오는 바이트 쌍을 새 기호 하나로 바꾸면 데이터가 짧아집니다. 토크나이저는 이 아이디어를 그대로 빌려, <strong>자주 함께 나오는 글자 묶음을 한 토큰으로</strong> 만듭니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>시작: 모든 단어를 글자로 쪼갠다        ▁ 모 델 은
+병합 1: 가장 잦은 쌍 (▁, 모) 합치기     ▁모 델 은
+병합 2: 가장 잦은 쌍 (▁모, 델) 합치기   ▁모델 은
+병합 3: 가장 잦은 쌍 (▁모델, 은) 합치기 ▁모델은
+</code></pre></div>
 <table>
 <thead>
 <tr>
-  <th>용어</th>
+  <th>개념</th>
   <th>뜻</th>
-  <th>Qwen2.5</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>토큰(Token)</td>
-  <td>모델이 처리하는 문자열 조각</td>
-  <td><code>&quot; model&quot;</code>, <code>&quot;한다&quot;</code>, <code>&quot;.&quot;</code></td>
+  <td>기본 어휘</td>
+  <td>학습 데이터에 나온 모든 글자(또는 바이트)</td>
 </tr>
 <tr>
-  <td>어휘 집합(Vocabulary)</td>
-  <td>모든 토큰의 목록</td>
-  <td>일반 토큰 151,643개</td>
+  <td>병합 규칙(Merge Rule)</td>
+  <td>&quot;이 두 조각을 합쳐라&quot;라는 규칙과 그 순서</td>
 </tr>
 <tr>
-  <td>Token ID</td>
-  <td>어휘 집합 안의 번호</td>
-  <td><code>&quot; model&quot;</code> → 1614</td>
+  <td>어휘 집합</td>
+  <td>기본 어휘 + 병합으로 생긴 새 토큰</td>
 </tr>
 <tr>
-  <td>Encoding</td>
-  <td>문자열 → Token ID 목록</td>
-  <td>토크나이저</td>
-</tr>
-<tr>
-  <td>Decoding</td>
-  <td>Token ID 목록 → 문자열</td>
-  <td>토크나이저</td>
+  <td>병합 횟수</td>
+  <td>사람이 정하는 값. 많을수록 어휘가 크고 토큰열이 짧다</td>
 </tr>
 </tbody>
 </table>
-<p>어휘 크기는 모델 크기와 직결됩니다. 제10장에서 보겠지만 Embedding 표는 어휘 크기만큼의 행을 가지며, 제02장에서 계산한 Logits 메모리도 어휘 크기에 비례합니다. Qwen2.5-0.5B 파라미터의 약 27.6%가 어휘와 연결된 Embedding입니다.</p>
-<h3>토크나이저 어휘와 모델 어휘의 차이</h3>
-<p>Qwen2.5 토크나이저에는 일반 토큰 151,643개와 특수 토큰 22개, 모두 151,665개가 있습니다. 그런데 모델의 <code>config.json</code>에는 <code>vocab_size</code>가 151,936으로 적혀 있습니다. 차이 271개는 모델의 Embedding 표에 미리 확보해 둔 <strong>쓰이지 않는 여유 행</strong>입니다. 151,936은 128 × 1,187로, 계산 효율을 고려해 넉넉하게 맞춘 값으로 볼 수 있습니다. 모델 메모리를 계산할 때는 151,936을, 토큰을 다룰 때는 151,665를 쓴다는 점을 구분해 둡니다.</p>
-</section><section class="section" id="s02"><h2><span class="num">02</span>문자·단어·서브워드 토큰화</h2><p>문장을 자르는 단위는 세 가지가 가능합니다.</p>
-<table>
-<thead>
-<tr>
-  <th>단위</th>
-  <th>예: &quot;모델은 예측한다&quot;</th>
-  <th>어휘 크기</th>
-  <th>문제점</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>문자</td>
-  <td>모, 델, 은, ␣, 예, 측, 한, 다</td>
-  <td>작다</td>
-  <td>토큰열이 너무 길다</td>
-</tr>
-<tr>
-  <td>단어</td>
-  <td>모델은, 예측한다</td>
-  <td>매우 크다</td>
-  <td>처음 보는 단어를 표현할 수 없다</td>
-</tr>
-<tr>
-  <td>서브워드</td>
-  <td>모, 델, 은, ␣예, 측, 한다</td>
-  <td>적당하다</td>
-  <td>균형점</td>
-</tr>
-</tbody>
-</table>
-<p>문자 단위는 어떤 글이든 표현할 수 있지만 문장이 너무 길어집니다. 제02장에서 본 것처럼 시퀀스가 길수록 메모리와 계산이 늘어납니다. 단어 단위는 짧지만 &quot;예측한다&quot;, &quot;예측했다&quot;, &quot;예측하는&quot;처럼 활용형마다 어휘가 필요해 어휘가 끝없이 커지고, 처음 보는 단어는 아예 표현하지 못합니다.</p>
-<p>서브워드는 그 중간입니다. 자주 쓰이는 조각(<code>&quot;한다&quot;</code>, <code>&quot; model&quot;</code>)은 통째로 토큰 하나로, 드문 조각은 더 잘게 나눕니다. 처음 보는 단어도 작은 조각을 이어 붙여 표현할 수 있습니다. 이 조각들을 어떻게 정하는지가 제09장 BPE의 주제입니다.</p>
-</section><section class="section" id="s03"><h2><span class="num">03</span>특수 토큰</h2><p>어휘 집합에는 글자가 아닌 <strong>역할</strong>을 나타내는 특수 토큰이 들어 있습니다. 제07장 Bigram 모델의 <code>^</code>(시작)와 <code>$</code>(끝)가 바로 특수 토큰이었습니다.</p>
-<h3>일반적인 역할</h3>
-<table>
-<thead>
-<tr>
-  <th>토큰</th>
-  <th>역할</th>
-  <th>쓰임</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>BOS(Beginning of Sequence)</td>
-  <td>문장 시작 표시</td>
-  <td>모델에 따라 입력 맨 앞에 붙인다</td>
-</tr>
-<tr>
-  <td>EOS(End of Sequence)</td>
-  <td>생성 종료 표시</td>
-  <td>모델이 이 토큰을 고르면 생성을 멈춘다</td>
-</tr>
-<tr>
-  <td>PAD(Padding)</td>
-  <td>길이 맞춤용 빈칸</td>
-  <td>길이가 다른 문장을 묶음으로 만들 때 채운다</td>
-</tr>
-</tbody>
-</table>
-<h3>Qwen2.5의 실제 설정</h3>
-<p>모델마다 특수 토큰 설정이 다르므로 일반론을 그대로 적용하면 안 됩니다. Qwen2.5-0.5B-Instruct의 실제 값은 다음과 같습니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>BOS        없음(None)        문장 앞에 시작 토큰을 자동으로 붙이지 않는다
-EOS        &lt;|im_end|&gt;       ID 151645   대화 응답 한 차례의 끝, 생성 종료
-PAD        &lt;|endoftext|&gt;    ID 151643   길이 맞춤용, EOS와 다른 토큰
-대화 시작   &lt;|im_start|&gt;     ID 151644   대화에서 역할(System·User·Assistant)의 시작
+<p><code>▁</code> 표시는 단어의 시작, 즉 앞에 공백이 있던 자리를 뜻합니다. 공백 정보를 토큰에 담아 두어야 디코딩할 때 띄어쓰기를 정확히 복원할 수 있습니다. 제08장에서 Qwen의 토큰이 <code>&quot; model&quot;</code>처럼 앞 공백을 품고 있던 것과 같은 원리입니다.</p>
+</section><section class="section" id="s02"><h2><span class="num">02</span>쌍 빈도 계산과 병합</h2><p>병합 한 번은 두 단계입니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>① 쌍 빈도 세기
+   모든 단어 안에서 이웃한 두 조각을 짝지어 센다. 같은 단어가 여러 번 나오면 그 횟수만큼 더한다.
+   예) &quot;아아아&quot; → (▁, 아) 1회, (아, 아) 2회
+
+② 가장 잦은 쌍 합치기
+   빈도가 가장 높은 쌍을 찾아, 모든 단어에서 그 쌍을 하나의 조각으로 바꾼다.
+   왼쪽부터 겹치지 않게 합친다. 예) (아, 아, 아)에서 (아, 아) 합치기 → (아아, 아)
 </code></pre></div>
-<p>이 설정은 제44·45장에서 결정적으로 중요해집니다. Instruct 모델에서는 PAD와 EOS가 서로 다른 토큰이므로, 길이 맞춤용 PAD를 학습에서 제외해도 EOS는 그대로 학습됩니다. 만약 둘이 같은 토큰이었다면 PAD를 제외하는 순간 EOS도 함께 지워져, 모델이 멈추는 법을 배우지 못합니다. 제07장에서 확인한 &quot;끝을 배워야 멈춘다&quot;는 원리가 여기서 다시 등장합니다.</p>
-</section><section class="section" id="s04"><h2><span class="num">04</span>AutoTokenizer와 한글·영문 비교</h2><p>Hugging Face의 <code>AutoTokenizer</code>는 모델 이름만 주면 그 모델에 맞는 토크나이저를 자동으로 불러옵니다. 모델 파일과 마찬가지로 교재가 고정한 Revision으로 불러와, 토큰화 결과가 바뀌지 않게 합니다.</p>
+<p>합치고 나면 단어의 모양이 바뀌므로 쌍 빈도를 다시 셉니다. 방금 생긴 <code>▁모</code>가 다음 병합에서 <code>델</code>과 짝을 이룰 수 있게 됩니다. 이렇게 짧은 조각이 점점 긴 조각으로 자라납니다.</p>
+<p>빈도가 같은 쌍이 여럿이면 어느 것을 먼저 합칠지 규칙이 필요합니다. 이 교재의 구현은 먼저 등장한 쌍을 고릅니다. 실제 토크나이저 라이브러리는 각자 정한 규칙을 쓰므로, 같은 데이터로 학습해도 동점 처리 방식에 따라 병합 순서가 조금 다를 수 있습니다.</p>
+</section><section class="section" id="s03"><h2><span class="num">03</span>병합 규칙과 인코딩</h2><p>학습이 끝나면 남는 것은 <strong>순서가 매겨진 병합 규칙 목록</strong>입니다. 새 문장을 토큰화할 때는 문장을 글자로 쪼갠 뒤, 이 규칙을 <strong>학습한 순서대로</strong> 하나씩 적용합니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>새 문장 &quot;모델은&quot;
+  글자로 쪼개기:      ▁ 모 델 은
+  규칙 2 (▁, 모):     ▁모 델 은
+  규칙 4 (▁모, 델):   ▁모델 은
+  규칙 5 (▁모델, 은): ▁모델은         → 토큰 1개
+</code></pre></div>
+<p>순서가 중요한 이유는 앞의 병합이 뒤의 병합 재료를 만들기 때문입니다. <code>▁모</code>가 먼저 만들어져야 <code>▁모델</code>을 만들 수 있습니다. 같은 규칙을 같은 순서로 적용하므로 같은 문장은 언제나 같은 토큰열이 됩니다.</p>
+<h3>처음 보는 단어</h3>
+<p>학습 데이터에 없던 단어도 아는 조각까지는 합쳐집니다. &quot;모델링&quot;은 <code>▁모델</code>까지 합쳐지고 <code>링</code>이 남습니다. 문제는 <code>링</code>이라는 <strong>글자 자체</strong>를 학습 데이터에서 본 적이 없다는 점입니다. 글자에서 출발하는 BPE는 기본 어휘에 없는 글자를 표현할 방법이 없습니다. 한글만 1만 자가 넘고, 한자·기호·이모지까지 생각하면 모든 글자를 기본 어휘에 넣는 것은 불가능합니다.</p>
+</section><section class="section" id="s04"><h2><span class="num">04</span>Byte-level BPE</h2><p>해법은 출발점을 글자에서 <strong>바이트</strong>로 바꾸는 것입니다. 컴퓨터는 모든 글자를 UTF-8이라는 규칙으로 1~4바이트에 담습니다. 바이트의 종류는 0부터 255까지 256가지뿐이므로, 256개의 바이트를 기본 어휘로 삼으면 <strong>세상의 어떤 글자도</strong> 표현할 수 있습니다.</p>
 <table>
 <thead>
 <tr>
-  <th>함수</th>
-  <th>하는 일</th>
+  <th>글자</th>
+  <th>UTF-8 바이트 수</th>
+  <th>바이트 값</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td><code>from_pretrained()</code></td>
-  <td>이름과 Revision으로 토크나이저 불러오기</td>
+  <td><code>A</code></td>
+  <td>1</td>
+  <td>65</td>
 </tr>
 <tr>
-  <td><code>encode()</code></td>
-  <td>문장 → Token ID 목록</td>
+  <td><code>토</code></td>
+  <td>3</td>
+  <td>237, 134, 160</td>
 </tr>
 <tr>
-  <td><code>decode()</code></td>
-  <td>Token ID 목록 → 문장</td>
-</tr>
-<tr>
-  <td><code>convert_tokens_to_ids()</code></td>
-  <td>토큰 문자열 → ID</td>
+  <td><code>🙂</code></td>
+  <td>4</td>
+  <td>240, 159, 153, 130</td>
 </tr>
 </tbody>
 </table>
-<p><code>from_pretrained()</code>는 <code>AutoTokenizer</code>에서, 나머지는 불러온 토크나이저 객체에서 호출합니다.</p>
-<h3>같은 의미, 다른 토큰 수</h3>
-<p>Qwen2.5의 어휘는 영어와 코드 데이터를 많이 반영해 만들어졌습니다. 그래서 같은 뜻의 문장이라도 언어에 따라 필요한 토큰 수가 다릅니다. 핵심 실습에서 직접 세어 보면 영문 문장은 41글자가 토큰 8개가 되지만, 한글 문장은 19글자가 토큰 16개가 됩니다.</p>
-<p>토큰 수의 차이는 실제 비용의 차이입니다. 같은 내용을 담은 한글 데이터는 더 긴 시퀀스가 되어, 학습 메모리(제02장의 Logits)와 생성 시간(제01장의 tokens/s)을 더 많이 씁니다. 제41장에서 한글 도메인 데이터를 설계할 때 최대 시퀀스 길이를 정하는 근거가 됩니다.</p>
-</section><section class="section" id="s05"><h2><span class="num">05</span>핵심 실습</h2><p>Qwen2.5 토크나이저를 불러와 특수 토큰을 확인하고, 한글·영문 문장을 토큰화했다가 되돌립니다.</p>
-<p>파일명: <code>examples/ch08/tokenize_compare.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제08장 핵심 실습: Qwen2.5 토크나이저로 한글·영문 문장을 토큰화하고 되돌리기
+<table>
+<thead>
+<tr>
+  <th>구분</th>
+  <th>글자 단위 BPE(이 장의 구현)</th>
+  <th>Byte-level BPE(Qwen2.5)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>기본 어휘</td>
+  <td>학습 데이터에 나온 글자</td>
+  <td>바이트 256개</td>
+</tr>
+<tr>
+  <td>처음 보는 글자</td>
+  <td>표현 불가</td>
+  <td>바이트로 쪼개 항상 표현 가능</td>
+</tr>
+<tr>
+  <td>어휘 크기</td>
+  <td>기본 글자 수 + 병합 수</td>
+  <td>256 + 병합 수</td>
+</tr>
+</tbody>
+</table>
+<p>제08장에서 &quot;토큰&quot;이 깨진 글자 조각 다섯 개로 나뉜 이유가 이것입니다. Qwen 토크나이저를 학습한 데이터에서 &quot;토큰&quot;의 바이트 조합은 통째로 병합될 만큼 자주 나오지 않았고, 그래서 일부 바이트 단위 토큰으로 남았습니다. 각 조각은 글자의 일부 바이트라 혼자서는 깨져 보이지만, 함께 디코딩하면 원래 글자로 정확히 돌아옵니다.</p>
+<p>Byte-level BPE의 어휘 크기는 &quot;256 + 병합 규칙 수&quot;입니다. 실습 2에서 Qwen의 실제 병합 규칙 파일로 이 식을 확인합니다.</p>
+</section><section class="section" id="s05"><h2><span class="num">05</span>핵심 실습</h2><h3>실습 1. 교육용 BPE 학습과 인코딩</h3>
+<p>제07장의 학습 문장 10개(<code>examples/ch07/corpus.txt</code>)로 병합 규칙 60개를 학습하고, 병합이 늘수록 토큰열이 어떻게 짧아지는지 확인합니다.</p>
+<p>파일명: <code>examples/ch09/bpe.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제09장 핵심 실습: 교육용 BPE 토크나이저 직접 구현
 #
-# 실행: python examples/ch08/tokenize_compare.py
-# 준비: 처음 실행할 때 토크나이저 파일(수 MB)을 내려받는다.
+# 실행: python examples/ch09/bpe.py
+#
+# BPE(Byte Pair Encoding): 가장 자주 붙어 나오는 두 토큰을 하나로 합치는 일을 반복해 어휘를 만든다.
+# 단어 앞에 '▁'를 붙여 공백 위치를 기억한다(디코딩 때 공백으로 되돌림).
+
+from collections import Counter
+from pathlib import Path
+
+SPACE = &quot;▁&quot;
+
+
+def to_words(text: str) -&gt; Counter:
+    &quot;&quot;&quot;문장을 공백으로 나누고, 단어마다 글자 튜플로 바꿔 등장 횟수를 센다.&quot;&quot;&quot;
+    words = Counter()
+    for word in text.split():
+        words[tuple(SPACE + word)] += 1
+    return words
+
+
+def pair_counts(words: Counter) -&gt; Counter:
+    &quot;&quot;&quot;모든 단어 안에서 이웃한 두 토큰 쌍의 빈도를 센다(단어 빈도만큼 가중).&quot;&quot;&quot;
+    counts = Counter()
+    for symbols, freq in words.items():
+        for pair in zip(symbols, symbols[1:]):
+            counts[pair] += freq
+    return counts
+
+
+def merge_symbols(symbols: tuple, pair: tuple) -&gt; tuple:
+    &quot;&quot;&quot;토큰열 안의 pair를 모두 하나의 토큰으로 합친다(왼쪽부터).&quot;&quot;&quot;
+    out, i = [], 0
+    while i &lt; len(symbols):
+        if i &lt; len(symbols) - 1 and (symbols[i], symbols[i + 1]) == pair:
+            out.append(symbols[i] + symbols[i + 1])
+            i += 2
+        else:
+            out.append(symbols[i])
+            i += 1
+    return tuple(out)
+
+
+def train_bpe(text: str, num_merges: int) -&gt; tuple:
+    &quot;&quot;&quot;병합 규칙(merges)을 순서대로 학습한다. 동점이면 먼저 나온 쌍을 고른다.&quot;&quot;&quot;
+    words = to_words(text)
+    base_vocab = sorted({c for symbols in words for c in symbols})
+    merges = []
+    for _ in range(num_merges):
+        counts = pair_counts(words)
+        if not counts:
+            break
+        best, freq = counts.most_common(1)[0]
+        merges.append((best, freq))
+        words = Counter({merge_symbols(s, best): f for s, f in words.items()})
+    vocab = base_vocab + [&quot;&quot;.join(pair) for pair, _ in merges]
+    return merges, vocab
+
+
+def encode(text: str, merges: list) -&gt; list:
+    &quot;&quot;&quot;새 문장에 학습된 병합 규칙을 학습 순서대로 적용한다.&quot;&quot;&quot;
+    tokens = []
+    for word in text.split():
+        symbols = tuple(SPACE + word)
+        for pair, _ in merges:
+            symbols = merge_symbols(symbols, pair)
+        tokens.extend(symbols)
+    return tokens
+
+
+def decode(tokens: list) -&gt; str:
+    return &quot;&quot;.join(tokens).replace(SPACE, &quot; &quot;).strip()
+
+
+def main() -&gt; None:
+    corpus = Path(__file__).parents[1].joinpath(&quot;ch07&quot;, &quot;corpus.txt&quot;).read_text(encoding=&quot;utf-8&quot;)
+    sample = &quot;언어 모델은 토큰을 고른다.&quot;
+
+    print(&quot;── 1. 병합 과정(처음 10번) ──&quot;)
+    merges, vocab = train_bpe(corpus, num_merges=60)
+    for step, (pair, freq) in enumerate(merges[:10], 1):
+        print(f&quot;{step:&gt;2}. {pair[0]!r} + {pair[1]!r} → {pair[0] + pair[1]!r}  (빈도 {freq})&quot;)
+
+    print(&quot;\n── 2. 병합 횟수에 따른 토큰 수 ──&quot;)
+    for n in (0, 10, 30, 60):
+        tokens = encode(sample, merges[:n])
+        print(f&quot;병합 {n:&gt;2}번: {len(tokens):&gt;2}개  {tokens}&quot;)
+
+    print(&quot;\n── 3. 왕복 복원 ──&quot;)
+    tokens = encode(sample, merges)
+    print(f&quot;{sample!r} → {tokens} → {decode(tokens)!r}&quot;)
+
+    print(&quot;\n── 4. 처음 보는 단어 ──&quot;)
+    unseen = &quot;모델링&quot;
+    tokens = encode(unseen, merges)
+    missing = [tok for tok in tokens if tok not in vocab]
+    print(f&quot;{unseen!r} → {tokens}&quot;)
+    print(f&quot;  '▁모델'은 학습한 조각으로 표현되지만, 어휘에 없는 토큰이 남는다: {missing}&quot;)
+
+    print(&quot;\n── 5. Byte-level: 모든 글자는 바이트로 표현할 수 있다 ──&quot;)
+    for ch in (&quot;A&quot;, &quot;토&quot;, &quot;🙂&quot;):
+        data = list(ch.encode(&quot;utf-8&quot;))
+        print(f&quot;{ch!r}: UTF-8 {len(data)}바이트 {data}&quot;)
+    print(f&quot;어휘 크기: 기본 글자 {len(vocab) - len(merges)}개 + 병합 {len(merges)}개 = {len(vocab)}개&quot;)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre></div>
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch09/bpe.py
+</code></pre></div>
+<p>실제 실행 결과(교재 검증 환경):</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 1. 병합 과정(처음 10번) ──
+ 1. '다' + '.' → '다.'  (빈도 10)
+ 2. '▁' + '모' → '▁모'  (빈도 4)
+ 3. '▁' + '고' → '▁고'  (빈도 4)
+ 4. '▁모' + '델' → '▁모델'  (빈도 3)
+ 5. '▁모델' + '은' → '▁모델은'  (빈도 3)
+ 6. '▁' + '다' → '▁다'  (빈도 3)
+ 7. '▁' + '문' → '▁문'  (빈도 3)
+ 8. '▁' + '토' → '▁토'  (빈도 3)
+ 9. '▁토' + '큰' → '▁토큰'  (빈도 3)
+10. '▁토큰' + '을' → '▁토큰을'  (빈도 3)
+
+── 2. 병합 횟수에 따른 토큰 수 ──
+병합  0번: 16개  ['▁', '언', '어', '▁', '모', '델', '은', '▁', '토', '큰', '을', '▁', '고', '른', '다', '.']
+병합 10번:  8개  ['▁', '언', '어', '▁모델은', '▁토큰을', '▁고', '른', '다.']
+병합 30번:  5개  ['▁언어', '▁모델은', '▁토큰을', '▁고른', '다.']
+병합 60번:  4개  ['▁언어', '▁모델은', '▁토큰을', '▁고른다.']
+
+── 3. 왕복 복원 ──
+'언어 모델은 토큰을 고른다.' → ['▁언어', '▁모델은', '▁토큰을', '▁고른다.'] → '언어 모델은 토큰을 고른다.'
+
+── 4. 처음 보는 단어 ──
+'모델링' → ['▁모델', '링']
+  '▁모델'은 학습한 조각으로 표현되지만, 어휘에 없는 토큰이 남는다: ['링']
+
+── 5. Byte-level: 모든 글자는 바이트로 표현할 수 있다 ──
+'A': UTF-8 1바이트 [65]
+'토': UTF-8 3바이트 [237, 134, 160]
+'🙂': UTF-8 4바이트 [240, 159, 153, 130]
+어휘 크기: 기본 글자 86개 + 병합 60개 = 146개
+</code></pre></div>
+<p><strong>핵심 코드 풀이</strong></p>
+<ul>
+<li><code>to_words()</code>는 문장을 공백으로 나눠 단어마다 <code>('▁', '모', '델', '은')</code>처럼 글자 튜플로 만들고, 같은 단어의 등장 횟수를 셉니다. 같은 단어를 매번 다시 세지 않고 횟수로 가중해 계산을 줄입니다.</li>
+<li><code>pair_counts()</code>가 02절의 ① 쌍 빈도 세기, <code>merge_symbols()</code>가 ② 합치기입니다. <code>train_bpe()</code>는 이 둘을 <code>num_merges</code>번 반복하며 합친 쌍을 <code>merges</code>에 순서대로 기록합니다.</li>
+<li>1번 결과의 첫 병합은 <code>'다' + '.'</code>(빈도 10)입니다. 학습 문장 10개가 모두 &quot;…다.&quot;로 끝나기 때문입니다. 데이터에서 가장 흔한 패턴이 가장 먼저 한 토큰이 된다는 BPE의 성질이 그대로 드러납니다.</li>
+<li>4·5번 병합(<code>▁모델</code>, <code>▁모델은</code>)과 9·10번 병합(<code>▁토큰</code>, <code>▁토큰을</code>)은 03절에서 설명한 &quot;앞의 병합이 뒤의 재료가 되는&quot; 과정입니다.</li>
+<li>2번 표에서 같은 문장이 병합 0번일 때 16개, 60번일 때 4개 토큰이 됩니다. 병합이 늘수록 어휘는 커지고 토큰열은 짧아집니다. 제08장에서 본 &quot;어휘 크기와 시퀀스 길이의 균형&quot;을 정하는 손잡이가 병합 횟수입니다.</li>
+<li>3번은 인코딩한 토큰을 다시 문장으로 되돌립니다. <code>decode()</code>는 토큰을 이어 붙이고 <code>▁</code>를 공백으로 바꿔 원문과 정확히 같은 문장을 만듭니다.</li>
+<li>4번은 03절의 한계를 실제로 보여 줍니다. <code>▁모델</code>은 학습한 조각으로 표현되지만 <code>링</code>은 어휘에 없는 토큰으로 남습니다.</li>
+<li>5번은 그 해법인 바이트를 보여 줍니다. 영문자는 1바이트, 한글은 3바이트, 이모지는 4바이트이며, 모두 0~255 사이의 값입니다.</li>
+</ul>
+<h3>실습 2. 실제 Qwen2.5의 병합 규칙</h3>
+<p>Qwen2.5 토크나이저는 병합 규칙을 <code>merges.txt</code> 파일에 한 줄에 하나씩 저장합니다. 이 파일의 규칙 수로 Byte-level BPE의 어휘 크기 식을 확인합니다.</p>
+<p>파일명: <code>examples/ch09/qwen_merges.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제09장 실습 2: 실제 Qwen2.5 토크나이저의 병합 규칙 확인
+#
+# 실행: python examples/ch09/qwen_merges.py
+#
+# Byte-level BPE의 어휘 = 기본 바이트 256개 + 학습된 병합 규칙 수
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from transformers import AutoTokenizer  # noqa: E402
-
-from common.models import QWEN_ID, QWEN_REVISION  # noqa: E402
-
-SENTENCES = [
-    &quot;언어 모델은 다음 토큰을 예측한다.&quot;,
-    &quot;A language model predicts the next token.&quot;,
-]
+from common.models import qwen_file  # noqa: E402
 
 
-def load_tokenizer(local_only: bool = False):
-    return AutoTokenizer.from_pretrained(QWEN_ID, revision=QWEN_REVISION,
-                                         local_files_only=local_only)
-
-
-def split_three_ways(text: str, tok) -&gt; dict:
-    &quot;&quot;&quot;같은 문장을 문자·단어·서브워드 단위로 나눈 개수.&quot;&quot;&quot;
-    return {
-        &quot;문자&quot;: len(text),
-        &quot;단어(공백 기준)&quot;: len(text.split()),
-        &quot;서브워드(Qwen)&quot;: len(tok.encode(text)),
-    }
+def load_merges(local_only: bool = False) -&gt; list:
+    path = qwen_file(&quot;merges.txt&quot;, local_only=local_only)
+    with open(path, encoding=&quot;utf-8&quot;) as f:
+        return [line.split() for line in f.read().split(&quot;\n&quot;) if line.strip()]
 
 
 def main() -&gt; None:
-    tok = load_tokenizer()
-
-    print(&quot;── 1. 어휘 집합과 특수 토큰 ──&quot;)
-    print(f&quot;일반 토큰 수: {tok.vocab_size:,},  특수 토큰 포함 전체: {len(tok):,}&quot;)
-    print(f&quot;BOS: {tok.bos_token},  EOS: {tok.eos_token} ({tok.eos_token_id}),  &quot;
-          f&quot;PAD: {tok.pad_token} ({tok.pad_token_id})&quot;)
-    for name in (&quot;&lt;|im_start|&gt;&quot;, &quot;&lt;|im_end|&gt;&quot;, &quot;&lt;|endoftext|&gt;&quot;):
-        print(f&quot;  {name:&lt;15} → ID {tok.convert_tokens_to_ids(name)}&quot;)
-
-    print(&quot;\n── 2. 문장 토큰화와 되돌리기 ──&quot;)
-    for text in SENTENCES:
-        ids = tok.encode(text)
-        pieces = [tok.decode([i]) for i in ids]
-        print(f&quot;\n문장: {text}&quot;)
-        print(f&quot;  Token ID ({len(ids)}개): {ids}&quot;)
-        print(f&quot;  토큰별 글자: {pieces}&quot;)
-        print(f&quot;  디코딩 결과가 원문과 같은가: {tok.decode(ids) == text}&quot;)
-
-    print(&quot;\n── 3. 문자·단어·서브워드 개수 비교 ──&quot;)
-    for text in SENTENCES:
-        counts = split_three_ways(text, tok)
-        print(f&quot;  {text[:20]:&lt;22}&quot; + &quot;  &quot;.join(f&quot;{k} {v}&quot; for k, v in counts.items()))
+    merges = load_merges()
+    print(f&quot;병합 규칙 수: {len(merges):,}&quot;)
+    print(f&quot;기본 바이트 256 + 병합 {len(merges):,} = {256 + len(merges):,}  (일반 토큰 수와 비교)&quot;)
+    print(&quot;\n처음 6개 규칙(Ġ는 공백 바이트를 표시하는 기호):&quot;)
+    for i, (a, b) in enumerate(merges[:6], 1):
+        print(f&quot;  {i}. {a!r} + {b!r} → {a + b!r}&quot;)
 
 
 if __name__ == &quot;__main__&quot;:
     main()
 </code></pre></div>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code># 처음 실행할 때 토크나이저 파일을 내려받습니다.
-python examples/ch08/tokenize_compare.py
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch09/qwen_merges.py
 </code></pre></div>
 <p>실제 실행 결과(교재 검증 환경):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 1. 어휘 집합과 특수 토큰 ──
-일반 토큰 수: 151,643,  특수 토큰 포함 전체: 151,665
-BOS: None,  EOS: &lt;|im_end|&gt; (151645),  PAD: &lt;|endoftext|&gt; (151643)
-  &lt;|im_start|&gt;    → ID 151644
-  &lt;|im_end|&gt;      → ID 151645
-  &lt;|endoftext|&gt;   → ID 151643
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>병합 규칙 수: 151,387
+기본 바이트 256 + 병합 151,387 = 151,643  (일반 토큰 수와 비교)
 
-── 2. 문장 토큰화와 되돌리기 ──
-
-문장: 언어 모델은 다음 토큰을 예측한다.
-  Token ID (16개): [129709, 31079, 54070, 142713, 33704, 126844, 10764, 228, 57160, 223, 108, 17877, 95617, 132612, 51876, 13]
-  토큰별 글자: ['언', '어', ' 모', '델', '은', ' 다음', ' �', '�', '��', '�', '�', '을', ' 예', '측', '한다', '.']
-  디코딩 결과가 원문과 같은가: True
-
-문장: A language model predicts the next token.
-  Token ID (8개): [32, 4128, 1614, 55878, 279, 1790, 3950, 13]
-  토큰별 글자: ['A', ' language', ' model', ' predicts', ' the', ' next', ' token', '.']
-  디코딩 결과가 원문과 같은가: True
-
-── 3. 문자·단어·서브워드 개수 비교 ──
-  언어 모델은 다음 토큰을 예측한다.   문자 19  단어(공백 기준) 5  서브워드(Qwen) 16
-  A language model pre  문자 41  단어(공백 기준) 7  서브워드(Qwen) 8
+처음 6개 규칙(Ġ는 공백 바이트를 표시하는 기호):
+  1. 'Ġ' + 'Ġ' → 'ĠĠ'
+  2. 'ĠĠ' + 'ĠĠ' → 'ĠĠĠĠ'
+  3. 'i' + 'n' → 'in'
+  4. 'Ġ' + 't' → 'Ġt'
+  5. 'ĠĠĠĠ' + 'ĠĠĠĠ' → 'ĠĠĠĠĠĠĠĠ'
+  6. 'e' + 'r' → 'er'
 </code></pre></div>
-<p><strong>핵심 코드 풀이</strong></p>
-<ul>
-<li><code>load_tokenizer()</code>는 공통 모듈의 <code>QWEN_ID</code>와 <code>QWEN_REVISION</code>으로 토크나이저를 불러옵니다. 제05장의 모델 파일과 같은 Revision이므로 모델과 토크나이저가 어긋날 일이 없습니다.</li>
-<li>1번에서 BOS가 <code>None</code>인 것을 확인합니다. 테스트의 <code>tok.encode(&quot;Hello&quot;) == [9707]</code>도 같은 사실을 검증합니다. 문장 앞에 아무 토큰도 자동으로 붙지 않습니다.</li>
-<li>2번의 <code>[tok.decode([i]) for i in ids]</code>는 토큰을 하나씩 따로 글자로 되돌려, 문장이 어디서 잘렸는지 보여 줍니다.</li>
-<li><code>split_three_ways()</code>는 03절의 세 가지 단위로 같은 문장을 나눠 개수를 셉니다. 공백 기준 단어 수는 <code>split()</code>으로 세는 단순 근사입니다.</li>
-</ul>
 <p><strong>결과 읽기</strong></p>
 <ul>
-<li>영문 문장은 거의 단어 하나가 토큰 하나입니다(<code>' language'</code>, <code>' model'</code>). 앞의 공백이 토큰에 붙어 있다는 점도 눈여겨보세요. 서브워드 토크나이저는 공백까지 토큰의 일부로 다룹니다.</li>
-<li>한글 문장에서 '언', '어'처럼 자주 나오는 글자는 한 글자가 한 토큰이고, <code>' 다음'</code>, <code>'한다'</code>처럼 자주 쓰이는 묶음은 여러 글자가 한 토큰입니다.</li>
-<li>눈여겨볼 것은 &quot;토큰&quot; 부분입니다. <code>' �'</code>, <code>'�'</code>, <code>'��'</code>처럼 깨진 글자로 표시되는 토큰 5개가 됩니다. 한글 한 글자는 컴퓨터 안에서 3바이트(UTF-8)인데, 이 토크나이저는 어휘에 없는 글자를 <strong>바이트 단위로</strong> 쪼개 표현하기 때문입니다. 토큰 하나만 따로 되돌리면 글자의 일부 바이트뿐이라 깨져 보이지만, 전체를 함께 되돌리면 &quot;토큰&quot;으로 정확히 복원됩니다. 마지막 줄의 <code>True</code>가 그 증거입니다. 이 바이트 단위 방식이 제09장의 Byte-level BPE입니다.</li>
-<li>3번 표의 토큰 수를 글자 수로 나누면 한글은 약 0.84, 영문은 약 0.20입니다. 같은 뜻을 전달하는 데 한글 문장이 토큰을 두 배 사용했습니다.</li>
+<li>병합 규칙 151,387개에 기본 바이트 256개를 더하면 151,643입니다. 제08장에서 확인한 Qwen 토크나이저의 일반 토큰 수와 <strong>정확히</strong> 같습니다. Qwen2.5의 어휘가 바이트에서 출발해 병합 규칙으로 만들어졌다는 직접적인 증거입니다. 여기에 특수 토큰 22개를 더하면 전체 151,665개가 됩니다.</li>
+<li><code>Ġ</code>는 공백 바이트를 화면에 표시하기 위해 바꿔 쓴 기호로, 이 장 구현의 <code>▁</code>와 같은 역할입니다.</li>
+<li>처음 규칙들은 공백 묶음(<code>ĠĠ</code>, <code>ĠĠĠĠ</code>)과 <code>in</code>, <code>er</code> 같은 영어 조각입니다. 코드의 들여쓰기 공백과 영어 텍스트가 학습 데이터에 매우 많았다는 뜻이며, 제08장에서 영문 문장의 토큰 수가 적었던 이유이기도 합니다.</li>
 </ul>
-</section><section class="section" id="s06"><h2><span class="num">06</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch08/test_ch08.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제08장 검증 테스트
+</section><section class="section" id="s06"><h2><span class="num">06</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch09/test_ch09.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제09장 검증 테스트
 #
-# 실행: python -m pytest examples/ch08 -q
-# 토크나이저 파일이 이미 내려받아져 있을 때만 실행한다.
+# 실행: python -m pytest examples/ch09 -q
 
 import sys
 from pathlib import Path
@@ -869,51 +948,69 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from tokenize_compare import SENTENCES, load_tokenizer, split_three_ways  # noqa: E402
+from bpe import decode, encode, merge_symbols, pair_counts, to_words, train_bpe  # noqa: E402
+
+CORPUS = Path(__file__).parents[1].joinpath(&quot;ch07&quot;, &quot;corpus.txt&quot;).read_text(encoding=&quot;utf-8&quot;)
 
 
-@pytest.fixture(scope=&quot;module&quot;)
-def tok():
+def test_pair_counts_hand_example():
+    # &quot;아아아&quot; 한 단어 → ('▁','아') 1회, ('아','아') 2회
+    counts = pair_counts(to_words(&quot;아아아&quot;))
+    assert counts[(&quot;▁&quot;, &quot;아&quot;)] == 1 and counts[(&quot;아&quot;, &quot;아&quot;)] == 2
+
+
+def test_merge_symbols_left_to_right():
+    assert merge_symbols((&quot;a&quot;, &quot;a&quot;, &quot;a&quot;), (&quot;a&quot;, &quot;a&quot;)) == (&quot;aa&quot;, &quot;a&quot;)
+
+
+def test_first_merge_is_most_frequent():
+    merges, _ = train_bpe(CORPUS, num_merges=1)
+    (pair, freq), = merges
+    assert freq == max(pair_counts(to_words(CORPUS)).values())
+
+
+def test_more_merges_never_increase_tokens():
+    merges, _ = train_bpe(CORPUS, num_merges=60)
+    sample = &quot;언어 모델은 토큰을 고른다.&quot;
+    lengths = [len(encode(sample, merges[:n])) for n in range(0, 61, 5)]
+    assert all(a &gt;= b for a, b in zip(lengths, lengths[1:]))
+
+
+@pytest.mark.parametrize(&quot;text&quot;, [&quot;언어 모델은 토큰을 고른다.&quot;, &quot;학습은 가중치를 고치는 일이다.&quot;])
+def test_round_trip(text):
+    merges, _ = train_bpe(CORPUS, num_merges=60)
+    assert decode(encode(text, merges)) == text
+
+
+def test_encoding_is_deterministic():
+    merges, _ = train_bpe(CORPUS, num_merges=60)
+    assert encode(&quot;모델은&quot;, merges) == encode(&quot;모델은&quot;, merges)
+
+
+def test_vocab_size_is_base_plus_merges():
+    merges, vocab = train_bpe(CORPUS, num_merges=60)
+    base = {c for symbols in to_words(CORPUS) for c in symbols}
+    assert len(vocab) == len(base) + len(merges)
+
+
+def test_utf8_byte_lengths():
+    assert [len(c.encode(&quot;utf-8&quot;)) for c in (&quot;A&quot;, &quot;토&quot;, &quot;🙂&quot;)] == [1, 3, 4]
+
+
+def test_qwen_vocab_equals_bytes_plus_merges():
+    qwen_merges = pytest.importorskip(&quot;qwen_merges&quot;)
     try:
-        return load_tokenizer(local_only=True)
+        merges = qwen_merges.load_merges(local_only=True)
     except Exception:
-        pytest.skip(&quot;토크나이저가 아직 내려받아지지 않음(tokenize_compare.py를 먼저 실행)&quot;)
-
-
-def test_vocab_sizes(tok):
-    assert tok.vocab_size == 151_643
-    assert len(tok) == 151_665          # 일반 토큰 + 특수 토큰
-    assert len(tok) &lt;= 151_936          # 모델 Embedding 행 수(config.json의 vocab_size) 이내
-
-
-def test_special_tokens(tok):
-    assert tok.bos_token is None        # Qwen2.5는 BOS를 쓰지 않는다
-    assert tok.eos_token == &quot;&lt;|im_end|&gt;&quot; and tok.eos_token_id == 151_645
-    assert tok.pad_token == &quot;&lt;|endoftext|&gt;&quot; and tok.pad_token_id == 151_643
-    assert tok.pad_token_id != tok.eos_token_id
-
-
-def test_no_token_added_automatically(tok):
-    # 문장 앞뒤에 특수 토큰이 자동으로 붙지 않는다: &quot;Hello&quot; 한 단어 → 토큰 1개
-    assert tok.encode(&quot;Hello&quot;) == [9707]
-
-
-@pytest.mark.parametrize(&quot;text&quot;, SENTENCES + [&quot;안녕하세요&quot;, &quot;FPGA와 LLM 🙂&quot;])
-def test_round_trip(tok, text):
-    assert tok.decode(tok.encode(text)) == text
-
-
-def test_korean_needs_more_tokens_per_character(tok):
-    ko, en = (split_three_ways(s, tok) for s in SENTENCES)
-    assert ko[&quot;서브워드(Qwen)&quot;] / ko[&quot;문자&quot;] &gt; en[&quot;서브워드(Qwen)&quot;] / en[&quot;문자&quot;]
+        pytest.skip(&quot;Qwen merges.txt가 아직 내려받아지지 않음(qwen_merges.py를 먼저 실행)&quot;)
+    assert 256 + len(merges) == 151_643
 </code></pre></div>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch08 -q
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch09 -q
 </code></pre></div>
-<p>실제 실행 결과(교재 검증 환경, 토크나이저 내려받은 상태):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>........                                                                 [100%]
-8 passed in 1.87s
+<p>실제 실행 결과(교재 검증 환경):</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>..........                                                               [100%]
+10 passed in 0.18s
 </code></pre></div>
-<p>토크나이저를 아직 내려받지 않았다면 테스트는 건너뜀(skipped)으로 표시됩니다. <code>tokenize_compare.py</code>를 한 번 실행한 뒤 다시 테스트하세요.</p>
 <table>
 <thead>
 <tr>
@@ -924,45 +1021,65 @@ def test_korean_needs_more_tokens_per_character(tok):
 </thead>
 <tbody>
 <tr>
-  <td>어휘 크기</td>
-  <td>일반 151,643, 전체 151,665, 모델 Embedding 행 수 이내</td>
+  <td>쌍 빈도 손계산</td>
+  <td>&quot;아아아&quot; → (▁, 아) 1회, (아, 아) 2회</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>특수 토큰</td>
-  <td>BOS 없음, EOS·PAD ID 확인, PAD ≠ EOS</td>
+  <td>합치기 규칙</td>
+  <td>왼쪽부터 겹치지 않게 합침</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>자동 추가 없음</td>
-  <td>&quot;Hello&quot; → 토큰 1개</td>
+  <td>첫 병합</td>
+  <td>가장 높은 쌍 빈도와 일치</td>
+  <td>통과</td>
+</tr>
+<tr>
+  <td>토큰 수 변화</td>
+  <td>병합이 늘어도 토큰 수가 늘지 않음</td>
   <td>통과</td>
 </tr>
 <tr>
   <td>왕복 복원</td>
-  <td>한글·영문·이모지 포함 4개 문장 모두 원문과 일치</td>
+  <td>두 문장 모두 원문과 일치</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>한글·영문 비교</td>
-  <td>글자당 토큰 수가 한글 &gt; 영문</td>
+  <td>결정성</td>
+  <td>같은 입력에 같은 토큰열</td>
+  <td>통과</td>
+</tr>
+<tr>
+  <td>어휘 크기</td>
+  <td>기본 글자 수 + 병합 수</td>
+  <td>통과</td>
+</tr>
+<tr>
+  <td>UTF-8</td>
+  <td>A·토·🙂 = 1·3·4바이트</td>
+  <td>통과</td>
+</tr>
+<tr>
+  <td>Qwen 어휘</td>
+  <td>256 + 병합 규칙 수 = 151,643</td>
   <td>통과</td>
 </tr>
 </tbody>
 </table>
 <p>이 장의 실습은 장치에 관계없이 같은 결과가 나오므로, CPU와 GT 1030 경로 모두 위 결과가 기준입니다.</p>
-<p><strong>완료 기준:</strong> 자신이 고른 한글 문장과 영문 문장을 토큰화해 토큰 수를 비교하고, 바이트 단위로 쪼개진 토큰이 전체 디코딩에서 복원되는 것을 확인하며, 테스트 8개를 모두 통과하면 이 장을 마친 것입니다.</p>
+<p><strong>완료 기준:</strong> 병합 과정 1~5번을 손으로 따라가 출력과 맞춰 보고, <code>num_merges</code>를 바꿔 어휘 크기와 토큰 수의 관계를 확인하며, 테스트 10개를 모두 통과하면 이 장을 마친 것입니다. 이 교재의 이후 모델은 직접 만든 BPE가 아니라 Qwen2.5 토크나이저를 그대로 사용합니다.</p>
 </section><section class="section" id="s07"><h2><span class="num">07</span>핵심 정리</h2><ul>
-<li>모델은 글자가 아니라 토크나이저가 만든 정수 ID를 봅니다. 토크나이저는 모델의 입구이자 출구입니다.</li>
-<li>서브워드 토큰화는 문자 단위(너무 긺)와 단어 단위(어휘 폭발) 사이의 균형점입니다.</li>
-<li>Qwen2.5는 BOS를 쓰지 않고, EOS(<code>&lt;|im_end|&gt;</code>)와 PAD(<code>&lt;|endoftext|&gt;</code>)가 서로 다른 토큰입니다.</li>
-<li>토크나이저 어휘는 151,665개, 모델 Embedding 행은 151,936개입니다. 계산 목적에 따라 구분해 씁니다.</li>
-<li>같은 뜻의 문장도 한글은 영문보다 토큰이 많이 필요하며, 이는 메모리와 생성 시간의 차이로 이어집니다.</li>
+<li>BPE는 가장 자주 붙어 나오는 두 조각을 합치는 일을 반복해 어휘를 만듭니다. 어휘는 데이터가 정합니다.</li>
+<li>학습 결과는 순서가 매겨진 병합 규칙 목록이며, 새 문장에는 같은 규칙을 같은 순서로 적용합니다.</li>
+<li>병합 횟수가 늘면 어휘는 커지고 토큰열은 짧아집니다.</li>
+<li>글자에서 출발하면 처음 보는 글자를 표현할 수 없습니다. Byte-level BPE는 바이트 256개에서 출발해 어떤 글자든 표현합니다.</li>
+<li>Qwen2.5의 일반 토큰 151,643개는 바이트 256개와 병합 규칙 151,387개의 합입니다.</li>
 </ul>
-<p><strong>다음 장 연결:</strong> 토크나이저의 어휘는 누가, 어떻게 정했을까요? 제09장에서는 어휘를 만드는 알고리즘 BPE를 직접 구현해, &quot;자주 붙어 나오는 쌍을 합친다&quot;는 단순한 규칙이 어떻게 서브워드 어휘를 만들어 내는지 단계별로 확인합니다.</p>
+<p><strong>다음 장 연결:</strong> 이제 문장은 Token ID의 나열이 되었습니다. 그러나 정수 번호에는 의미가 없습니다. 1614번과 1615번 토큰이 비슷한 뜻이라는 보장은 없습니다. 제10장에서는 Token ID를 의미를 담은 <strong>벡터</strong>로 바꾸는 Embedding을 다루고, 제1부를 마무리합니다.</p>
 </section><div class="chapter-links" id="chapter-links"></div></main></div>
 <footer class="footer">LLM 파인튜닝 및 로컬 AI 구현 · v01  · 실습 결과는 실제 환경에서 검증</footer>
-<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v01.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v01.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v01.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v01.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v01.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v01.html"}]};</script><script>/*
+<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v02.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v01.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v01.html"}]};</script><script>/*
  * 교육용 HTML 공통 동작 — 유지보수용 원본 (STANDARD 4·10.3·10.4)
  * 페이지 본문은 바꾸지 않고 탐색·이전/다음·모바일 메뉴·코드 복사만 덧붙인다.
  * 입력: 페이지의 window.COURSE (tools/guide/build_guides.py가 실제 존재하는 장만 넣음),
