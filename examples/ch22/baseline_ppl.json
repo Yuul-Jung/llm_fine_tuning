@@ -1,0 +1,39 @@
+{
+  "data": {
+    "split": "eval",
+    "shape": [
+      5,
+      128
+    ],
+    "fingerprint": "1d8635627d660631",
+    "context": "블록마다 독립, 겹침 없음",
+    "labels": "전체 토큰(첫 토큰 제외), 마스킹 없음"
+  },
+  "models": {
+    "Qwen2.5-0.5B Base": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+    "Qwen2.5-0.5B-Instruct": "7ae557604adf67be50417f59c2c2f167def9a775",
+    "Qwen2-Tiny(무작위)": "seed 0, 제19장 init_weights"
+  },
+  "results": {
+    "Qwen2-Tiny(무작위)": {
+      "tokens": 635,
+      "loss": 11.9897,
+      "ppl": 161095.07
+    },
+    "Qwen2.5-0.5B Base": {
+      "tokens": 635,
+      "loss": 2.8976,
+      "ppl": 18.13
+    },
+    "Qwen2.5-0.5B-Instruct": {
+      "tokens": 635,
+      "loss": 3.0655,
+      "ppl": 21.45
+    }
+  },
+  "env": {
+    "torch": "2.15.0+cpu",
+    "transformers": "5.24.0",
+    "python": "3.13.18"
+  }
+}

@@ -341,6 +341,22 @@
         "Instruct Model",
         "RAG"
       ]
+    },
+    {
+      "id": "ch22",
+      "number": 22,
+      "title": "손실함수와 Perplexity",
+      "subtitle": "Cross Entropy와 NLL → 한 칸 이동 → Loss Masking → Perplexity → 기준값 저장",
+      "slug": "ch22_loss_perplexity",
+      "version": "v01",
+      "source": "content/ch22.md",
+      "tags": [
+        "Cross Entropy",
+        "NLL",
+        "Loss Masking",
+        "Perplexity",
+        "기준값"
+      ]
     }
   ]
 }
