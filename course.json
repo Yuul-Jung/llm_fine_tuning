@@ -244,6 +244,22 @@
         "KV Cache",
         "Qwen"
       ]
+    },
+    {
+      "id": "ch16",
+      "number": 16,
+      "title": "위치 정보와 RoPE",
+      "subtitle": "순서를 모르는 Attention → 절대·상대 위치 → 회전 행렬과 RoPE → rope_theta → 직접 구현으로 실제 모델 재현",
+      "slug": "ch16_rope",
+      "version": "v01",
+      "source": "content/ch16.md",
+      "tags": [
+        "RoPE",
+        "위치 인코딩",
+        "회전 행렬",
+        "rope_theta",
+        "Qwen"
+      ]
     }
   ]
 }
