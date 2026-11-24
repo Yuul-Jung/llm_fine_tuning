@@ -132,6 +132,22 @@
         "AutoTokenizer",
         "Qwen"
       ]
+    },
+    {
+      "id": "ch09",
+      "number": 9,
+      "title": "BPE 토크나이저 직접 구현",
+      "subtitle": "BPE의 아이디어 → 쌍 빈도와 병합 → 병합 규칙으로 인코딩 → Byte-level BPE → Qwen 병합 규칙 확인",
+      "slug": "ch09_bpe_tokenizer",
+      "version": "v01",
+      "source": "content/ch09.md",
+      "tags": [
+        "BPE",
+        "Merge Rule",
+        "Byte-level",
+        "UTF-8",
+        "Qwen"
+      ]
     }
   ]
 }
