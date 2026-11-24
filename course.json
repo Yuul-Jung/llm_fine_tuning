@@ -357,6 +357,22 @@
         "Perplexity",
         "기준값"
       ]
+    },
+    {
+      "id": "ch23",
+      "number": 23,
+      "title": "역전파와 Gradient",
+      "subtitle": "미분과 연쇄법칙 → 계산 그래프와 Autograd → Gradient 누적과 초기화 → 수치 미분 검증",
+      "slug": "ch23_backprop_gradient",
+      "version": "v01",
+      "source": "content/ch23.md",
+      "tags": [
+        "역전파",
+        "Gradient",
+        "연쇄법칙",
+        "Autograd",
+        "gradcheck"
+      ]
     }
   ]
 }
