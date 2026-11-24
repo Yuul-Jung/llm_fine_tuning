@@ -390,6 +390,23 @@
         "Learning Rate",
         "Optimizer State"
       ]
+    },
+    {
+      "id": "ch25",
+      "number": 25,
+      "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning",
+      "subtitle": "학습 루프 → Scheduler, Accumulation, Clipping → 소규모 사전학습 → HF 형식 저장 → Full Fine-tuning → 0.5B 메모리 판정",
+      "slug": "ch25_pretrain_full_ft",
+      "version": "v01",
+      "source": "content/ch25.md",
+      "tags": [
+        "사전학습",
+        "Full Fine-tuning",
+        "학습 루프",
+        "과적합",
+        "파국적 망각",
+        "Checkpoint"
+      ]
     }
   ]
 }
