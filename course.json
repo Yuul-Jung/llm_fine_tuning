@@ -116,6 +116,22 @@
         "Sampling",
         "Bigram"
       ]
+    },
+    {
+      "id": "ch08",
+      "number": 8,
+      "title": "Tokenizer와 Vocabulary",
+      "subtitle": "토큰·어휘 집합 → 문자·단어·서브워드 → 특수 토큰 → Qwen2.5 토크나이저로 한글·영문 비교",
+      "slug": "ch08_tokenizer_vocab",
+      "version": "v01",
+      "source": "content/ch08.md",
+      "tags": [
+        "Tokenizer",
+        "Vocabulary",
+        "특수 토큰",
+        "AutoTokenizer",
+        "Qwen"
+      ]
     }
   ]
 }

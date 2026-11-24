@@ -10,3 +10,4 @@ pytest
 matplotlib
 huggingface_hub
 safetensors
+transformers
