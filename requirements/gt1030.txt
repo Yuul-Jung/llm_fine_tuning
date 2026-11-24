@@ -3,13 +3,15 @@
 # 조건: NVIDIA 드라이버 570 이상(nvidia-smi로 확인)
 # 근거: PyTorch 2.15부터 Pascal을 지원하던 CUDA 12.6 빌드 배포 종료 → 2.14 계열로 고정
 # 상태: 배포 파일(torch-2.14.0+cu126, Python 3.12) 존재 확인. GT 1030 실제 실행은 미검증(교재 검증 환경에 GPU 없음).
+# 라이브러리 버전: CPU 경로에서 검증한 조합을 후보로 고정. bitsandbytes 공식 문서 기준 NF4는 CC 6.0 이상 지원,
+#                  LLM.int8은 CC 7.5 이상 필요(GT 1030 불가). GPU 실행 확인 후 이 주석을 갱신한다.
 
 --extra-index-url https://download.pytorch.org/whl/cu126
 torch==2.14.0+cu126
-pytest
-matplotlib
-huggingface_hub
-safetensors
-transformers
-peft                      # 제30장부터(교재 검증: 0.22.0)
-bitsandbytes              # 제36장부터(GT 1030 CUDA 실행은 제37장에서 확인, 미검증)
+pytest==9.2.0
+matplotlib==3.11.2
+huggingface_hub==2.4.0
+safetensors==0.8.0
+transformers==5.24.0
+peft==0.22.0              # 제30장부터
+bitsandbytes==0.50.2      # 제36장부터(GT 1030 CUDA 실행 미검증)

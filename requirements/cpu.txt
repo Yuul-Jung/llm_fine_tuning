@@ -1,13 +1,13 @@
 # CPU 경로 패키지 목록
 # 설치: python -m pip install -r requirements/cpu.txt
-# 검증: 교재 검증 환경(Ubuntu 24.04, Python 3.13)에서 torch 2.15.0+cpu 설치·실행 확인
+# 검증: 교재 검증 환경(Ubuntu 24.04, Python 3.13)에서 아래 버전 조합으로 제1~37장 전체 테스트 통과(제37장에서 고정)
 
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.15.0+cpu
-pytest
-matplotlib
-huggingface_hub
-safetensors
-transformers
-peft                      # 제30장부터(교재 검증: 0.22.0)
-bitsandbytes              # 제36장부터(교재 검증: 0.50.2, CPU)
+pytest==9.2.0
+matplotlib==3.11.2
+huggingface_hub==2.4.0
+safetensors==0.8.0
+transformers==5.24.0
+peft==0.22.0              # 제30장부터
+bitsandbytes==0.50.2      # 제36장부터(CPU 경로 지원)

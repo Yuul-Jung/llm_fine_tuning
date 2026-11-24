@@ -589,6 +589,22 @@
         "Double Quantization",
         "bitsandbytes"
       ]
+    },
+    {
+      "id": "ch37",
+      "number": 37,
+      "title": "bitsandbytes와 GPU 호환성",
+      "subtitle": "BitsAndBytesConfig → 하드웨어 조건 → Compute Dtype과 torch_dtype → 버전 조합 확정",
+      "slug": "ch37_bitsandbytes",
+      "version": "v01",
+      "source": "content/ch37.md",
+      "tags": [
+        "bitsandbytes",
+        "BitsAndBytesConfig",
+        "Compute Capability",
+        "4비트 로딩",
+        "버전 고정"
+      ]
     }
   ]
 }
