@@ -806,6 +806,23 @@
         "Gradient Checkpointing",
         "비교"
       ]
+    },
+    {
+      "id": "ch50",
+      "number": 50,
+      "title": "평가·오답 분석·반복 개선",
+      "subtitle": "기준값 비교 → 과적합 판정 → 하이퍼파라미터 조정 → 환각과 망각 → 오답 분석과 재학습 → 최종 Test",
+      "slug": "ch50_improve",
+      "version": "v01",
+      "source": "content/ch50.md",
+      "tags": [
+        "오답 분석",
+        "과적합",
+        "Early Stopping",
+        "데이터 보강",
+        "환각",
+        "최종 평가"
+      ]
     }
   ]
 }

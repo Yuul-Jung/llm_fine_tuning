@@ -1,0 +1,196 @@
+{
+ "version": 1,
+ "note": "train 문항마다 같은 답에 질문만 바꾼 변형 하나(제50장). 답·입력·분류는 원본을 따른다.",
+ "rows": [
+  {
+   "id": "fpga-001-p1",
+   "source_id": "fpga-001",
+   "instruction": "FPGA를 처음 듣는 사람에게 짧게 소개해 주세요."
+  },
+  {
+   "id": "fpga-002-p1",
+   "source_id": "fpga-002",
+   "instruction": "ASIC 대신 FPGA를 고를 때 무엇이 다른지 알려 주세요."
+  },
+  {
+   "id": "fpga-003-p1",
+   "source_id": "fpga-003",
+   "instruction": "LUT(Look-Up Table)는 FPGA 안에서 무슨 일을 하나요?"
+  },
+  {
+   "id": "fpga-004-p1",
+   "source_id": "fpga-004",
+   "instruction": "BRAM과 분산 RAM은 어떻게 다르고 언제 각각을 쓰나요?"
+  },
+  {
+   "id": "fpga-006-p1",
+   "source_id": "fpga-006",
+   "instruction": "FPGA에 내려받는 비트스트림 파일은 무엇을 담고 있나요?"
+  },
+  {
+   "id": "fpga-007-p1",
+   "source_id": "fpga-007",
+   "instruction": "Verilog 같은 HDL이 C 언어와 다른 점은 무엇인가요?"
+  },
+  {
+   "id": "fpga-008-p1",
+   "source_id": "fpga-008",
+   "instruction": "순차 논리는 조합 논리와 무엇이 다른가요?"
+  },
+  {
+   "id": "fpga-009-p1",
+   "source_id": "fpga-009",
+   "instruction": "FPGA 흐름에서 합성 단계는 무엇을 만드나요?"
+  },
+  {
+   "id": "fpga-011-p1",
+   "source_id": "fpga-011",
+   "instruction": "wire로 선언할 때와 reg로 선언할 때는 무엇이 다른가요?"
+  },
+  {
+   "id": "fpga-012-p1",
+   "source_id": "fpga-012",
+   "instruction": "= 할당과 <= 할당은 각각 어디에 써야 하나요?"
+  },
+  {
+   "id": "fpga-013-p1",
+   "source_id": "fpga-013",
+   "instruction": "다음 Verilog 코드의 동작을 설명해 주세요."
+  },
+  {
+   "id": "fpga-014-p1",
+   "source_id": "fpga-014",
+   "instruction": "always 블록의 감지 목록에 *를 쓰면 어떤 뜻인가요?"
+  },
+  {
+   "id": "fpga-015-p1",
+   "source_id": "fpga-015",
+   "instruction": "parameter를 쓰면 Verilog 모듈에서 무엇이 좋아지나요?"
+  },
+  {
+   "id": "fpga-016-p1",
+   "source_id": "fpga-016",
+   "instruction": "다음 선언에서 data는 모두 몇 비트인가요?"
+  },
+  {
+   "id": "fpga-017-p1",
+   "source_id": "fpga-017",
+   "instruction": "signed를 붙이지 않으면 Verilog에서 어떤 문제가 생기나요?"
+  },
+  {
+   "id": "fpga-020-p1",
+   "source_id": "fpga-020",
+   "instruction": "다음 연산 결과는 몇 비트가 되나요?"
+  },
+  {
+   "id": "fpga-021-p1",
+   "source_id": "fpga-021",
+   "instruction": "조합 논리용 always 블록에서 래치가 만들어지는 이유를 알려 주세요."
+  },
+  {
+   "id": "fpga-023-p1",
+   "source_id": "fpga-023",
+   "instruction": "밀리 머신은 무어 머신과 출력이 어떻게 다른가요?"
+  },
+  {
+   "id": "fpga-025-p1",
+   "source_id": "fpga-025",
+   "instruction": "파이프라인 레지스터를 넣으면 왜 클럭을 더 빠르게 할 수 있나요?"
+  },
+  {
+   "id": "fpga-026-p1",
+   "source_id": "fpga-026",
+   "instruction": "비동기 리셋은 동기 리셋과 무엇이 다른가요?"
+  },
+  {
+   "id": "fpga-027-p1",
+   "source_id": "fpga-027",
+   "instruction": "푸시 버튼 신호를 그대로 쓰면 왜 문제가 되나요?"
+  },
+  {
+   "id": "fpga-028-p1",
+   "source_id": "fpga-028",
+   "instruction": "고정소수점 두 수를 곱하면 결과를 몇 비트로 잡아야 하나요?"
+  },
+  {
+   "id": "fpga-029-p1",
+   "source_id": "fpga-029",
+   "instruction": "플립플롭의 셋업 시간과 홀드 시간을 설명해 주세요."
+  },
+  {
+   "id": "fpga-030-p1",
+   "source_id": "fpga-030",
+   "instruction": "타이밍 결과에 음수 슬랙이 나오면 어떻게 해석하나요?"
+  },
+  {
+   "id": "fpga-032-p1",
+   "source_id": "fpga-032",
+   "instruction": "1비트 신호를 다른 클럭 도메인으로 안전하게 넘기는 방법은 무엇인가요?"
+  },
+  {
+   "id": "fpga-034-p1",
+   "source_id": "fpga-034",
+   "instruction": "create_clock 제약을 빠뜨리면 어떤 일이 생기나요?"
+  },
+  {
+   "id": "fpga-035-p1",
+   "source_id": "fpga-035",
+   "instruction": "게이트로 만든 클럭이나 나눈 클럭을 쓰면 왜 위험한가요?"
+  },
+  {
+   "id": "fpga-036-p1",
+   "source_id": "fpga-036",
+   "instruction": "느린 동작이 필요할 때 클럭 인에이블을 어떻게 쓰나요?"
+  },
+  {
+   "id": "fpga-037-p1",
+   "source_id": "fpga-037",
+   "instruction": "FPGA 설계는 어떤 단계를 차례로 거치나요?"
+  },
+  {
+   "id": "fpga-038-p1",
+   "source_id": "fpga-038",
+   "instruction": "테스트벤치를 만드는 목적은 무엇인가요?"
+  },
+  {
+   "id": "fpga-039-p1",
+   "source_id": "fpga-039",
+   "instruction": "XDC에서 포트를 보드의 핀에 연결하는 방법을 알려 주세요."
+  },
+  {
+   "id": "fpga-042-p1",
+   "source_id": "fpga-042",
+   "instruction": "IP 코어를 쓰면 직접 설계할 때보다 무엇이 좋나요?"
+  },
+  {
+   "id": "fpga-043-p1",
+   "source_id": "fpga-043",
+   "instruction": "$monitor는 $display와 출력 시점이 어떻게 다른가요?"
+  },
+  {
+   "id": "fpga-045-p1",
+   "source_id": "fpga-045",
+   "instruction": "multiple driver 오류가 나는 원인은 무엇인가요?"
+  },
+  {
+   "id": "fpga-046-p1",
+   "source_id": "fpga-046",
+   "instruction": "합성 도구가 회로 일부를 지웠다고 경고하면 어디를 살펴야 하나요?"
+  },
+  {
+   "id": "fpga-047-p1",
+   "source_id": "fpga-047",
+   "instruction": "LED가 하나도 켜지지 않으면 무엇부터 확인해야 하나요?"
+  },
+  {
+   "id": "fpga-048-p1",
+   "source_id": "fpga-048",
+   "instruction": "시뮬레이션과 달리 보드에서만 이상하게 동작하면 무엇을 의심해야 하나요?"
+  },
+  {
+   "id": "fpga-050-p1",
+   "source_id": "fpga-050",
+   "instruction": "다음 카운터가 0에서 9까지 반복하지 못하는 원인은 무엇인가요?"
+  }
+ ]
+}
