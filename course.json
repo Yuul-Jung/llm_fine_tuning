@@ -823,6 +823,23 @@
         "환각",
         "최종 평가"
       ]
+    },
+    {
+      "id": "ch51",
+      "number": 51,
+      "title": "모델·Adapter 저장과 복원",
+      "subtitle": "state_dict와 Checkpoint → Safetensors → Adapter 파일 구조 → Revision과 버전 관리",
+      "slug": "ch51_save_load",
+      "version": "v01",
+      "source": "content/ch51.md",
+      "tags": [
+        "state_dict",
+        "Checkpoint",
+        "Safetensors",
+        "Adapter",
+        "Revision",
+        "pickle"
+      ]
     }
   ]
 }
