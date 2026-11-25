@@ -705,6 +705,22 @@
         "데이터 누출",
         "평가 지표"
       ]
+    },
+    {
+      "id": "ch44",
+      "number": 44,
+      "title": "Chat Template",
+      "subtitle": "System·User·Assistant → apply_chat_template → Generation Prompt → 기본 System 문구",
+      "slug": "ch44_chat_template",
+      "version": "v01",
+      "source": "content/ch44.md",
+      "tags": [
+        "Chat Template",
+        "ChatML",
+        "특수 토큰",
+        "Generation Prompt",
+        "System 문구"
+      ]
     }
   ]
 }
