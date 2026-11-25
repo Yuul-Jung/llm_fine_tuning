@@ -655,6 +655,22 @@
         "비교 실험",
         "하드웨어 선택"
       ]
+    },
+    {
+      "id": "ch41",
+      "number": 41,
+      "title": "SFT와 데이터셋 설계",
+      "subtitle": "SFT와 Instruction Tuning → 데이터 구조 → 데이터 품질 → 출처와 라이선스 → 도메인 설계",
+      "slug": "ch41_sft_dataset",
+      "version": "v01",
+      "source": "content/ch41.md",
+      "tags": [
+        "SFT",
+        "Instruction Tuning",
+        "데이터 품질",
+        "라이선스",
+        "FPGA 데이터셋"
+      ]
     }
   ]
 }
