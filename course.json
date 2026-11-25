@@ -910,6 +910,23 @@
       ]
     },
     {
+      "id": "ch56",
+      "number": 56,
+      "title": "Ollama 사용자 정의 배포",
+      "subtitle": "Ollama 구조와 Modelfile → 기본 배포 경로 → 템플릿·생성 설정 일치 → GT 1030 사용 조건",
+      "slug": "ch56_ollama",
+      "version": "v01",
+      "source": "content/ch56.md",
+      "tags": [
+        "Ollama",
+        "Modelfile",
+        "TEMPLATE",
+        "PARAMETER",
+        "repeat_penalty",
+        "GT 1030"
+      ]
+    },
+    {
       "id": "ch57",
       "number": 57,
       "title": "로컬 LLM API 서비스",
