@@ -738,6 +738,23 @@
         "EOS",
         "잘림"
       ]
+    },
+    {
+      "id": "ch46",
+      "number": 46,
+      "title": "PyTorch SFT 학습 루프",
+      "subtitle": "데이터를 묶는 세 부품 → 학습 단계 → Validation → 로그와 Checkpoint",
+      "slug": "ch46_sft_loop",
+      "version": "v01",
+      "source": "content/ch46.md",
+      "tags": [
+        "SFT",
+        "DataLoader",
+        "Collator",
+        "Validation",
+        "Checkpoint",
+        "재개"
+      ]
     }
   ]
 }
