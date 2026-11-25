@@ -840,6 +840,23 @@
         "Revision",
         "pickle"
       ]
+    },
+    {
+      "id": "ch52",
+      "number": 52,
+      "title": "LoRA 병합과 출력 검증",
+      "subtitle": "병합 수식과 merge_and_unload → Qwen2-Tiny 병합 → QLoRA Adapter 병합 → CPU에서 병합",
+      "slug": "ch52_merge",
+      "version": "v01",
+      "source": "content/ch52.md",
+      "tags": [
+        "병합",
+        "merge_and_unload",
+        "QLoRA",
+        "Logits 비교",
+        "PPL",
+        "CPU"
+      ]
     }
   ]
 }
