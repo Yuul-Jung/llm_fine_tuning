@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="기준값 비교 → 과적합 판정 → 하이퍼파라미터 조정 → 환각과 망각 → 오답 분석과 재학습 → 최종 Test"><title>제50장 · 평가·오답 분석·반복 개선 · LLM 파인튜닝 및 로컬 AI 구현</title>
+<meta name="description" content="SFT와 Instruction Tuning → 데이터 구조 → 데이터 품질 → 출처와 라이선스 → 도메인 설계"><title>제41장 · SFT와 데이터셋 설계 · LLM 파인튜닝 및 로컬 AI 구현</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>/*
@@ -576,11 +576,11 @@ pre code {
     height: auto;
   }
 }
-</style></head><body data-chapter="ch50">
+</style></head><body data-chapter="ch41">
 <button type="button" class="mobile-menu" id="mobile-menu" aria-controls="course-nav" aria-expanded="false">☰ 장·목차</button><div class="shade" id="shade"></div>
-<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 50</p><h1>제50장 · 평가·오답 분석·반복 개선</h1><p>기준값 비교 → 과적합 판정 → 하이퍼파라미터 조정 → 환각과 망각 → 오답 분석과 재학습 → 최종 Test</p><div class="chips"><span class="chip">오답 분석</span><span class="chip">과적합</span><span class="chip">Early Stopping</span><span class="chip">데이터 보강</span><span class="chip">환각</span><span class="chip">최종 평가</span></div></div></header>
-<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제48·49장의 학습은 도메인 PPL을 크게 낮췄지만 핵심어 기준을 통과하지 못했습니다. 이제 &quot;왜 실패했는가&quot;를 묻고, 답에 맞춰 무엇을 바꿀지 정하고, 바꾼 결과를 다시 재야 합니다. 이 순환이 파인튜닝 작업의 대부분을 차지합니다.</p>
-<p>이 장은 제5부의 마지막 장으로, 평가와 개선의 한 바퀴를 끝까지 돕니다. 틀린 답을 유형별로 나누고, 학습·검증 손실로 과적합을 판정하며, 원인에 맞춰 데이터를 보강하고 학습 길이를 바꾼 후보들을 <strong>validation으로만</strong> 비교합니다. 마지막으로 확정한 모델을 test로 <strong>한 번만</strong> 평가하고, 그 결과로 모델을 다시 고르지 않습니다. 개선이 실패하면 실패도 결과로 기록합니다.</p>
+<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 41</p><h1>제41장 · SFT와 데이터셋 설계</h1><p>SFT와 Instruction Tuning → 데이터 구조 → 데이터 품질 → 출처와 라이선스 → 도메인 설계</p><div class="chips"><span class="chip">SFT</span><span class="chip">Instruction Tuning</span><span class="chip">데이터 품질</span><span class="chip">라이선스</span><span class="chip">FPGA 데이터셋</span></div></div></header>
+<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>제3·4부에서는 고정된 일반 문장으로 학습의 원리를 확인했습니다. 제5부에서는 실제 목적을 가진 학습으로 넘어갑니다. 목표는 <strong>FPGA와 디지털 설계에 관한 질문에 정확하고 일관된 형식으로 답하는 모델</strong>입니다. 그 첫걸음은 코드가 아니라 데이터입니다.</p>
+<p>이 장은 지도 미세조정(SFT)이 무엇을 가르치는지 정리하고, 학습 데이터의 세 가지 구조를 비교한 뒤, 좋은 데이터의 기준과 출처·라이선스 기록 원칙을 세웁니다. 그리고 FPGA 질의응답 50개를 설계표에 맞춰 직접 작성하고, 기준에 맞는지 코드로 검사합니다. 제5부의 나머지 장(제42~50장)은 모두 이 데이터로 진행합니다.</p>
 <table>
 <thead>
 <tr>
@@ -591,409 +591,375 @@ pre code {
 <tbody>
 <tr>
   <td>핵심 질문</td>
-  <td>무엇이 틀렸는지 어떻게 나누고, 무엇을 바꿔야 하며, 최종 성능은 어떻게 한 번에 확정하는가</td>
+  <td>SFT 데이터는 어떤 구조여야 하며, 어떤 기준으로 설계·검사하는가</td>
 </tr>
 <tr>
   <td>실습 결과물</td>
-  <td>오답 유형표, 질문 변형 보강 데이터, 과적합 판정, 후보 4개 비교표, 확정 모델의 test 평가</td>
+  <td>설계표, FPGA 질의응답 50개, 데이터 설명서, 설계 기준 검사 결과, 세 가지 구조 변환</td>
 </tr>
 <tr>
   <td>실습 파일</td>
-  <td><code>examples/ch50/</code>의 <code>improve.py</code>, <code>test_ch50.py</code>, <code>runs.json</code>, <code>final_test.json</code>, 보강 데이터 <code>augment_v1.json</code></td>
+  <td><code>datasets/fpga_qa/fpga_qa.json</code>, <code>datasets/fpga_qa/README.md</code>, <code>examples/ch41/</code>의 <code>check_dataset.py</code>, <code>test_ch41.py</code></td>
 </tr>
 <tr>
   <td>선수 장</td>
-  <td>제43장(기준), 제47장(기준값), 제48장(LoRA 학습)</td>
+  <td>제21장(Base와 Instruct, 프롬프트·RAG·파인튜닝), 제22장(Loss Masking 기초)</td>
 </tr>
 </tbody>
 </table>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>제48장 LoRA 답 ─사람이 분류─▶ 오답 유형표 ─원인 가설─▶ (1) 과적합 → 15단계에서 멈춤 (2) 반복 부족 → 질문 변형 보강
-   후보: 원본-15, 원본-30, 보강-15, 보강-30 ─validation, 제43장 기준─▶ 규칙으로 하나 확정
-   확정 모델 ─test(한 번만)─▶ 최종 결과(다시 고르지 않음)
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>설계표(분류·목표 수) → 질의응답 작성 → 설계 기준 검사 → 데이터 설명서·라이선스 기록
+                                                     → 제42장: JSONL·Datasets로 변환
 </code></pre></div>
-</section><section class="section" id="s01"><h2><span class="num">01</span>기준값과 학습 모델 비교</h2><p>모든 비교는 제47장의 기준값과 <strong>같은 validation 데이터, 같은 측정 함수</strong>로 합니다. 제48장의 LoRA는 도메인 PPL을 17.64에서 12.55로 낮추고 일반 PPL을 21.89로 유지했지만, 핵심어 적중률(0.04)과 형식 준수율(0.67)이 기준에 못 미쳤습니다.</p>
+</section><section class="section" id="s01"><h2><span class="num">01</span>SFT와 Instruction Tuning</h2><p><strong>SFT</strong>(Supervised Fine-tuning, 지도 미세조정)는 &quot;이런 입력에는 이렇게 답하라&quot;는 모범 답안을 보여 주며 학습하는 것입니다. 학습 원리는 제3부와 같은 다음 토큰 예측이지만, 데이터가 질문과 모범 답변의 <strong>쌍</strong>으로 되어 있다는 점이 다릅니다. 지시문(Instruction)을 다양하게 담은 SFT를 특히 <strong>Instruction Tuning</strong>이라 부르며, 제21장의 Instruct 모델이 이렇게 만들어졌습니다.</p>
+<p>제21장에서 정리한 대로, SFT가 가장 잘 가르치는 것은 <strong>대답하는 방식</strong>입니다. 답의 형식, 길이, 말투, 용어 사용, 모를 때의 태도입니다. 이 장의 데이터도 이 점을 중심에 둡니다. 50개 질의응답으로 모델에게 FPGA의 모든 지식을 넣을 수는 없지만, &quot;FPGA 질문에는 정확한 용어로, 존댓말 서술형으로, 1~4문장 안에 핵심부터 답한다&quot;는 방식은 가르칠 수 있습니다.</p>
+</section><section class="section" id="s02"><h2><span class="num">02</span>데이터 구조</h2><p>같은 질의응답도 세 가지 구조로 담을 수 있습니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>Instruction·Input·Output  {&quot;instruction&quot;: 지시문, &quot;input&quot;: 추가 자료(코드 등), &quot;output&quot;: 답}
+Prompt-Completion         {&quot;prompt&quot;: 지시문 + 추가 자료, &quot;completion&quot;: 답}
+대화형(messages)          {&quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, …}, {&quot;role&quot;: &quot;assistant&quot;, …}]}
+</code></pre></div>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>Instruction 구조     지시와 자료가 나뉘어 있어 작성·검토가 쉽다     데이터 작성 원본(이 장)
+Prompt-Completion    무엇을 학습할지(Completion)가 분명하다        Completion-only 학습(제45장)
+대화형               Chat Template(제44장)에 그대로 들어간다       Instruct 모델의 SFT(제46장 이후)
+</code></pre></div>
+<p>세 구조는 서로 바꿀 수 있습니다. 이 교재는 <strong>사람이 쓰고 검토하기 쉬운 Instruction·Input·Output으로 원본을 작성</strong>하고, 학습 단계에서 필요한 구조로 변환합니다. 원본을 하나로 두어야 수정할 때 여러 파일이 어긋나지 않습니다.</p>
+</section><section class="section" id="s03"><h2><span class="num">03</span>데이터 품질</h2><p>SFT의 결과는 데이터의 양보다 <strong>품질</strong>에 크게 좌우됩니다. 모델은 데이터에 있는 것을 그대로 따라 하기 때문입니다. 틀린 답이 있으면 틀린 답을, 형식이 제각각이면 제각각인 형식을 배웁니다.</p>
 <table>
 <thead>
 <tr>
-  <th>지표</th>
-  <th>무엇을 말하는가</th>
-  <th>제48장 LoRA</th>
+  <th>기준</th>
+  <th>이 데이터의 규칙</th>
+  <th>지키지 않으면</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>도메인 PPL</td>
-  <td>정답 문장을 얼마나 예측하기 쉬워졌나</td>
-  <td>크게 좋아짐</td>
+  <td>정확성</td>
+  <td>답의 모든 문장이 사실이다. 제품마다 다른 내용(핀 번호 등)은 일반화하거나 &quot;회로도에서 확인&quot;으로 안내한다</td>
+  <td>그럴듯한 오답을 자신 있게 말한다</td>
 </tr>
 <tr>
-  <td>일반 PPL</td>
-  <td>원래 능력을 잃지 않았나</td>
-  <td>유지</td>
+  <td>일관성</td>
+  <td>같은 개념은 같은 용어로, 존댓말 서술형으로 끝맺는다</td>
+  <td>답마다 말투와 용어가 흔들린다</td>
 </tr>
 <tr>
-  <td>핵심어</td>
-  <td>답에 정답의 핵심 개념이 들어 있나</td>
-  <td>거의 없음</td>
+  <td>형식 통일</td>
+  <td>답은 1~4문장, 핵심을 첫 문장에 둔다. 코드는 input에 둔다</td>
+  <td>길이와 구조가 제멋대로인 답을 낸다</td>
 </tr>
 <tr>
-  <td>형식</td>
-  <td>짧은 존댓말 평서문인가</td>
-  <td>여섯 중 넷</td>
+  <td>다양성</td>
+  <td>설계표의 분류별 목표 수를 지킨다</td>
+  <td>한 유형만 잘하고 나머지는 못한다</td>
+</tr>
+<tr>
+  <td>중복 없음</td>
+  <td>같은 질문을 두 번 넣지 않는다</td>
+  <td>특정 질문만 외운다</td>
 </tr>
 </tbody>
 </table>
-<p>도메인 PPL과 핵심어가 반대로 움직인다는 것이 첫 단서입니다. 모델은 정답 문장의 <strong>말투와 단어 분포</strong>를 배워 PPL은 낮아졌지만, 질문마다 다른 <strong>사실</strong>은 배우지 못했습니다.</p>
-</section><section class="section" id="s02"><h2><span class="num">02</span>과적합과 과소적합</h2><p>학습 손실과 검증 손실을 함께 보면 학습 상태를 판정할 수 있습니다.</p>
+<p>이 중 기계로 검사할 수 있는 것(필수 항목, 중복, 분류별 개수, 끝맺음 형식, 코드 질문의 input 유무)은 코드로 검사하고, 정확성처럼 사람이 판단해야 하는 것은 작성할 때와 검토할 때 확인합니다. 제43장에서 정제와 평가 지표를 더 다룹니다.</p>
+</section><section class="section" id="s04"><h2><span class="num">04</span>출처와 라이선스</h2><p>배포할 데이터에는 <strong>어디서 왔고 어떤 조건으로 쓸 수 있는지</strong>를 반드시 기록합니다. 웹 문서나 다른 데이터셋, 책의 문장을 가져오면 그 원본의 이용 조건을 따라야 하고, 조건에 따라 배포가 금지될 수도 있습니다. 다른 모델이 생성한 답을 데이터로 쓸 때도 그 모델의 이용 약관을 확인해야 합니다.</p>
+<p>이 교재의 FPGA 데이터는 외부 문서를 인용하지 않고 <strong>새로 작성</strong>했습니다. 그 사실을 데이터 옆의 설명서(<code>README.md</code>, 흔히 Dataset Card라 부릅니다)와 저장소 전체의 데이터 목록(<code>datasets/LICENSES.md</code>)에 함께 적었습니다. 설명서에는 파일, 샘플 수, 형식, 문체, 출처, 라이선스, 검증 방법, 설계표를 담습니다. 1년 뒤의 나나 데이터를 받은 다른 사람이 이 데이터가 무엇인지 설명서만 보고 알 수 있어야 합니다.</p>
+</section><section class="section" id="s05"><h2><span class="num">05</span>전자·반도체·FPGA 도메인 설계</h2><p>데이터를 쓰기 전에 <strong>설계표</strong>를 만듭니다. 이 분야의 학습자와 실무자가 실제로 묻는 질문을 유형별로 나누고, 유형마다 몇 개를 쓸지 정합니다.</p>
 <table>
 <thead>
 <tr>
-  <th>상태</th>
-  <th>학습 손실</th>
-  <th>검증 손실</th>
+  <th>분류</th>
+  <th>목표 수</th>
+  <th>질문 유형</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>과소적합</td>
-  <td>높게 머문다</td>
-  <td>높게 머문다</td>
+  <td>개념</td>
+  <td>10</td>
+  <td>FPGA 구조(LUT, BRAM, DSP)와 설계 단계의 용어</td>
 </tr>
 <tr>
-  <td>적절</td>
-  <td>내려간다</td>
-  <td>함께 내려간다</td>
+  <td>Verilog 문법</td>
+  <td>10</td>
+  <td>문법 요소의 의미, 짧은 코드 해석</td>
 </tr>
 <tr>
-  <td>과적합</td>
-  <td>계속 내려간다</td>
-  <td>바닥을 찍고 오른다</td>
+  <td>설계 기법</td>
+  <td>8</td>
+  <td>래치, FSM, 카운터, 파이프라인, 리셋, 디바운싱, 고정소수점</td>
+</tr>
+<tr>
+  <td>타이밍</td>
+  <td>8</td>
+  <td>셋업·홀드, 슬랙, 임계 경로, 클럭 도메인, 클럭 제약</td>
+</tr>
+<tr>
+  <td>도구와 흐름</td>
+  <td>7</td>
+  <td>설계 흐름, 테스트벤치, 제약 파일, 보고서, 디버깅 도구</td>
+</tr>
+<tr>
+  <td>디버깅</td>
+  <td>7</td>
+  <td>오류·경고의 원인, 확인 순서, 코드 속 버그 찾기</td>
 </tr>
 </tbody>
 </table>
-<p>제48장의 학습은 15단계 이후 학습 손실만 내려가고 검증 손실은 2.49에서 2.53으로 올랐습니다. train 38개를 여러 번 보며 <strong>문장 자체를 외우기 시작한</strong> 과적합입니다. 대응은 검증 손실이 가장 낮은 지점에서 멈추는 것(Early Stopping)입니다. 이 장은 같은 학습에서 15단계와 30단계의 Adapter를 모두 저장해 비교합니다.</p>
-</section><section class="section" id="s03"><h2><span class="num">03</span>하이퍼파라미터 조정</h2><p>학습률, 묶음 크기, Rank, Target Modules, 단계 수 같은 설정은 <strong>validation으로만</strong> 고릅니다. test를 보고 설정을 고르면 test가 설정 선택에 쓰여, 마지막 평가가 실제보다 좋게 나옵니다. 제47~49장에서 핵심어·형식을 test로 재다가 이 문제를 발견해 기준 파일을 version 2로 고친 것도 같은 이유입니다(제43장).</p>
-<p>후보가 여럿이면 <strong>선택 규칙도 미리 정합니다.</strong> 이 장의 규칙은 &quot;제43장 기준 합격 수가 많은 것, 같으면 핵심어 적중률이 높은 것, 그래도 같으면 도메인 PPL이 낮은 것&quot;입니다. 규칙을 먼저 적어 두면 결과를 본 뒤 마음에 드는 후보를 고르는 일을 막을 수 있습니다. 검증 문항이 6개뿐이므로 지표의 작은 차이는 우연일 수 있다는 점도 함께 기억합니다.</p>
-</section><section class="section" id="s04"><h2><span class="num">04</span>환각과 파국적 망각</h2><p>학습 후에 나빠질 수 있는 두 가지를 따로 잽니다.</p>
-<table>
-<thead>
-<tr>
-  <th>현상</th>
-  <th>무엇인가</th>
-  <th>이 교재의 측정</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>환각(Hallucination)</td>
-  <td>그럴듯하지만 사실이 아닌 내용을 만든다</td>
-  <td>핵심어 적중률과 사람이 읽은 오답 유형</td>
-</tr>
-<tr>
-  <td>파국적 망각(Catastrophic Forgetting)</td>
-  <td>새 데이터를 배우며 원래 능력을 잃는다</td>
-  <td>고정 eval 문장의 일반 PPL</td>
-</tr>
-</tbody>
-</table>
-<p>두 현상은 서로 다른 데이터로 재야 합니다. 환각은 도메인 질문(validation)에서, 망각은 도메인과 무관한 일반 문장에서 드러납니다. 도메인 PPL 하나로는 둘 다 보이지 않습니다. 제48장 학습에서 일반 PPL은 2% 오르는 데 그쳐 망각은 작았지만, 답은 거의 모두 환각이었습니다.</p>
-</section><section class="section" id="s05"><h2><span class="num">05</span>오답 분석과 재학습</h2><p>틀린 답을 하나씩 읽고 유형을 나눕니다. 이 장은 세 가지를 기록합니다. 어떤 유형인가, 무엇이 틀렸는가, <strong>train에 그 지식이 있는가</strong>입니다. 마지막 질문이 가장 중요합니다. 학습 데이터에 없는 지식은 파인튜닝으로 생기지 않기 때문입니다.</p>
-<table>
-<thead>
-<tr>
-  <th>유형</th>
-  <th>뜻</th>
-  <th>대응</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>사실 오류</td>
-  <td>개념을 지어내거나 틀리게 설명</td>
-  <td>지식이 train에 있으면 반복 노출, 없으면 데이터 추가</td>
-</tr>
-<tr>
-  <td>질문 오해</td>
-  <td>묻는 것과 다른 것에 답함</td>
-  <td>같은 유형의 질문 예시 추가</td>
-</tr>
-<tr>
-  <td>형식 위반</td>
-  <td>권유형, 목록, 잘림</td>
-  <td>과적합 억제, 형식이 일정한 예시</td>
-</tr>
-</tbody>
-</table>
-<p>이 장의 보강은 <strong>질문 변형</strong>입니다(<code>datasets/fpga_qa/</code>의 <code>augment_v1.json</code>). train 38개마다 답은 그대로 두고 질문만 다르게 쓴 문항 하나를 더해 76개로 만듭니다. 같은 사실을 다른 질문으로 두 번 보게 해 &quot;질문의 표현&quot;이 아니라 &quot;답의 내용&quot;에 연결되도록 하려는 것입니다. 보강 문항은 원본과 같은 그룹이므로 모두 train에 두고, validation·test와 비슷하지 않은지 제43장의 누출 검사로 확인합니다.</p>
-</section><section class="section" id="s06"><h2><span class="num">06</span>최종 Test 평가</h2><p>후보 비교가 끝나면 규칙으로 고른 모델 하나를 test로 한 번 평가합니다. 이 결과는 <strong>보고만 하고, 모델을 다시 고르는 데 쓰지 않습니다.</strong> test 결과가 기대보다 나빠도 다른 후보를 test로 다시 재지 않습니다. 그렇게 하면 test가 또 하나의 validation이 되어, 처음 보는 질문에 대한 성능을 아무도 모르게 됩니다. 결과가 나쁘면 그 사실을 기록하고, 다음 개선은 새 데이터와 새 test로 합니다.</p>
-</section><section class="section" id="s07"><h2><span class="num">07</span>핵심 실습</h2><p>파일명: <code>examples/ch50/improve.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제50장 핵심 실습: 오답 유형을 나누고, 데이터를 보강해 다시 학습한 뒤, 확정 모델을 test로 한 번만 평가한다
-#
-# 실행: python examples/ch50/improve.py   (교재 검증 환경 CPU 약 40분, 중간 결과는 runs.json에 저장되어 이어서 실행 가능)
-#
-# 만드는 파일: examples/ch50/runs.json, examples/ch50/final_test.json, models/ch50/(Adapter)
+<p>질문 형식도 섞었습니다. 대부분은 설명을 요청하지만, 5개는 Verilog 코드를 input에 주고 해석하거나 버그를 찾게 합니다. 실제 질문에는 코드가 함께 오는 경우가 많기 때문입니다. 제31·34장의 2의 보수, 고정소수점처럼 이 교재에서 다룬 주제와 이어지는 질문도 넣었습니다.</p>
+<p>작성한 데이터의 예를 보면 다음과 같습니다.</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>[개념] FPGA의 LUT는 어떤 역할을 하나요?
+→ LUT(Look-Up Table)는 입력 비트 조합마다 출력값을 미리 저장해 둔 작은 메모리입니다.
+  입력이 n개인 LUT는 2의 n제곱 개의 칸을 가지므로, 입력 n개짜리 조합 논리 함수라면
+  어떤 것이든 하나의 LUT로 구현할 수 있습니다.
 
-import gc
+[디버깅] 아래 코드에서 문제가 되는 점을 찾아 주세요.
+  input: always @(*) begin  if (en) q = d;  end
+→ en이 0일 때 q에 값을 할당하지 않으므로, 이전 값을 유지하기 위한 래치가 만들어집니다. …
+</code></pre></div>
+</section><section class="section" id="s06"><h2><span class="num">06</span>핵심 실습</h2><h3>데이터 설명서</h3>
+<p>파일명: <code>datasets/fpga_qa/README.md</code></p>
+<div class="codeblock"><div class="codebar"><span>markdown</span></div><pre><code># FPGA 도메인 질의응답 데이터셋 v1
+
+| 항목 | 내용 |
+|---|---|
+| 파일 | `fpga_qa.json`(작성 원본, 제41장), 제42장에서 JSONL로 변환 |
+| 샘플 수 | 50 |
+| 형식 | `id`, `category`, `instruction`, `input`(없으면 빈 문자열), `output` |
+| 언어·문체 | 한국어, 존댓말 서술형(`~입니다.`), 답변 1~4문장 |
+| 출처 | 이 교재를 위해 새로 작성(외부 문서·질의응답 인용 없음) |
+| 라이선스 | 교재 원고와 같은 조건으로 배포 |
+| 검증 | `examples/ch41/check_dataset.py`(필수 항목, 중복, 분류, 문체) |
+| 분할 | `split_v1.json`(제43장): 유사 문항 그룹 단위, 분류마다 validation·test 1개씩, train 38 / validation 6 / test 6 |
+| 보강 | `augment_v1.json`(제50장): train 문항마다 질문만 바꾼 변형 1개(38개), 답·입력은 원본과 같음 |
+| 평가 기준 | `configs/eval_criteria.yaml`(제43장, version 2): validation·test 문항의 핵심어 포함 |
+</code></pre></div>
+</section><section class="section" id="s07"><h2><span class="num">07</span>설계표</h2><table>
+<thead>
+<tr>
+  <th>분류</th>
+  <th>목표 수</th>
+  <th>질문 유형</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>개념</td>
+  <td>10</td>
+  <td>FPGA 구조와 설계 단계의 용어 설명</td>
+</tr>
+<tr>
+  <td>Verilog 문법</td>
+  <td>10</td>
+  <td>문법 요소의 의미, 짧은 코드 해석</td>
+</tr>
+<tr>
+  <td>설계 기법</td>
+  <td>8</td>
+  <td>래치, FSM, 카운터, 파이프라인, 리셋, 디바운싱, 고정소수점</td>
+</tr>
+<tr>
+  <td>타이밍</td>
+  <td>8</td>
+  <td>셋업·홀드, 슬랙, 임계 경로, 클럭 도메인, 클럭 제약</td>
+</tr>
+<tr>
+  <td>도구와 흐름</td>
+  <td>7</td>
+  <td>설계 흐름, 테스트벤치, 제약 파일, 보고서, 디버깅 도구</td>
+</tr>
+<tr>
+  <td>디버깅</td>
+  <td>7</td>
+  <td>오류·경고의 원인과 확인 순서, 코드 속 버그 찾기</td>
+</tr>
+</tbody>
+</table>
+<p>특정 벤더 도구의 명령이나 보드의 핀 번호처럼 제품마다 다른 내용은 답변에 넣지 않거나 &quot;보드의 회로도에서 확인&quot;으로 안내합니다.</p>
+<div class="codeblock"><div class="codebar"><span>TEXT</span></div><pre><code>
+데이터 원본 `datasets/fpga_qa/fpga_qa.json`에는 50개의 질의응답이 위 형식으로 들어 있습니다. 파일은 저장소에서 직접 열어 볼 수 있습니다.
+
+### 설계 기준 검사와 구조 변환
+
+파일명: `examples/ch41/check_dataset.py`
+
+```python
+# 제41장 핵심 실습: FPGA 질의응답 데이터셋을 설계 기준으로 검사하고, 세 가지 데이터 구조로 바꿔 본다
+#
+# 실행: python examples/ch41/check_dataset.py
+
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
-for p in (HERE.parent, HERE.parent / &quot;ch41&quot;, HERE.parent / &quot;ch43&quot;, HERE.parent / &quot;ch46&quot;,
-          HERE.parent / &quot;ch47&quot;, HERE.parent / &quot;ch48&quot;):
-    sys.path.insert(0, str(p))
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / &quot;examples&quot;))
 
-import torch  # noqa: E402
-from transformers.utils import logging  # noqa: E402
-
-from baseline import measure  # noqa: E402                    (제47장)
-from check_dataset import load  # noqa: E402                   (제41장)
-from clean_split import NGRAM_T, jaccard, ngrams  # noqa: E402  (제43장)
-from criteria import judge, load_criteria  # noqa: E402        (제43장)
-from lora_sft import SCOPES, lora_config  # noqa: E402         (제48장)
-from sft_loop import SFTDataset, split_rows  # noqa: E402      (제46장)
-from sft_trainer import SAME_AS_CH46, to_hf_dataset  # noqa: E402   (제47장)
-
-logging.disable_progress_bar()
-logging.set_verbosity_error()
-RUNS = HERE / &quot;runs.json&quot;
-FINAL = HERE / &quot;final_test.json&quot;
-MODELS = ROOT / &quot;models&quot; / &quot;ch50&quot;
-
-# 제48장 LoRA의 validation 답을 사람이 읽고 분류한 결과(유형, 근거, train에 관련 지식이 있는가)
-ERRORS = {
-    &quot;fpga-005&quot;: (&quot;사실 오류&quot;, &quot;DSP를 '디지털 소규모 프로그래밍'으로 풀어 지어냄&quot;, False),
-    &quot;fpga-019&quot;: (&quot;사실 오류&quot;, &quot;generate를 '합성할 때 재사용하는 블록'으로 설명&quot;, False),
-    &quot;fpga-024&quot;: (&quot;질문 오해&quot;, &quot;몇까지 세야 하는지 계산하지 않고 '어렵다'고 답함&quot;, False),
-    &quot;fpga-033&quot;: (&quot;사실 오류&quot;, &quot;메타안정성을 '같은 값으로 유지되는 기능'으로 설명&quot;, True),
-    &quot;fpga-041&quot;: (&quot;사실 오류&quot;, &quot;ILA를 설계 파일 비교 도구처럼 설명, 권유형으로 끝남&quot;, False),
-    &quot;fpga-049&quot;: (&quot;질문 오해&quot;, &quot;래치를 찾지 못하고 'q가 d보다 클 때'를 문제로 짚음&quot;, True),
-}
-RELATED = {&quot;fpga-033&quot;: &quot;fpga-032(클럭 도메인 사이 동기화)&quot;, &quot;fpga-049&quot;: &quot;fpga-021(래치가 생기는 원인)&quot;}
+DATA = ROOT / &quot;datasets&quot; / &quot;fpga_qa&quot; / &quot;fpga_qa.json&quot;
+FIELDS = (&quot;id&quot;, &quot;category&quot;, &quot;instruction&quot;, &quot;input&quot;, &quot;output&quot;)
+PLAN = {&quot;개념&quot;: 10, &quot;Verilog 문법&quot;: 10, &quot;설계 기법&quot;: 8, &quot;타이밍&quot;: 8, &quot;도구와 흐름&quot;: 7, &quot;디버깅&quot;: 7}
 
 
-def augmented_rows() -&gt; list:
-    &quot;&quot;&quot;train 38개 + 질문만 바꾼 변형 38개(답·입력·분류는 원본)&quot;&quot;&quot;
-    src = {r[&quot;id&quot;]: r for r in load()}
-    aug = json.loads((ROOT / &quot;datasets/fpga_qa/augment_v1.json&quot;).read_text(encoding=&quot;utf-8&quot;))[&quot;rows&quot;]
-    return split_rows(&quot;train&quot;) + [dict(src[a[&quot;source_id&quot;]], id=a[&quot;id&quot;], instruction=a[&quot;instruction&quot;]) for a in aug]
+def load(path: Path = DATA) -&gt; list:
+    return json.loads(path.read_text(encoding=&quot;utf-8&quot;))
 
 
-def leak_check(rows: list) -&gt; float:
-    &quot;&quot;&quot;보강 데이터가 validation·test 문항과 비슷하지 않은지(제43장 기준)&quot;&quot;&quot;
-    held = split_rows(&quot;validation&quot;) + split_rows(&quot;test&quot;)
-    g = {r[&quot;id&quot;]: ngrams(r[&quot;instruction&quot;] + &quot; &quot; + r[&quot;input&quot;]) for r in rows + held}
-    return max(jaccard(g[a[&quot;id&quot;]], g[h[&quot;id&quot;]]) for a in rows for h in held)
+def problems(rows: list) -&gt; list:
+    &quot;&quot;&quot;설계 기준 위반 목록. 비어 있으면 통과.&quot;&quot;&quot;
+    out = []
+    ids, questions = Counter(r.get(&quot;id&quot;) for r in rows), Counter(r.get(&quot;instruction&quot;) for r in rows)
+    for r in rows:
+        rid = r.get(&quot;id&quot;, &quot;?&quot;)
+        for f in FIELDS:
+            if f not in r:
+                out.append(f&quot;{rid}: '{f}' 항목 없음&quot;)
+            elif f != &quot;input&quot; and not str(r[f]).strip():
+                out.append(f&quot;{rid}: '{f}' 비어 있음&quot;)
+        if r.get(&quot;category&quot;) not in PLAN:
+            out.append(f&quot;{rid}: 설계표에 없는 분류 '{r.get('category')}'&quot;)
+        out_text = r.get(&quot;output&quot;, &quot;&quot;).strip()
+        if not out_text.endswith(&quot;다.&quot;):
+            out.append(f&quot;{rid}: 답변이 '~다.'로 끝나지 않음&quot;)
+        if &quot;아래 코드&quot; in r.get(&quot;instruction&quot;, &quot;&quot;) and not r.get(&quot;input&quot;):
+            out.append(f&quot;{rid}: 코드를 가리키는 질문인데 input이 비어 있음&quot;)
+    out += [f&quot;{k}: id 중복 {v}회&quot; for k, v in ids.items() if v &gt; 1]
+    out += [f&quot;질문 중복 {v}회: {k[:20]}&quot; for k, v in questions.items() if v &gt; 1]
+    counts = Counter(r.get(&quot;category&quot;) for r in rows)
+    out += [f&quot;분류 '{c}' {counts[c]}개(목표 {n}개)&quot; for c, n in PLAN.items() if counts[c] != n]
+    return out
 
 
-def history(name: str) -&gt; tuple:
-    &quot;&quot;&quot;Trainer가 Checkpoint에 남긴 기록에서 학습·검증 손실을 읽는다&quot;&quot;&quot;
-    log = json.loads((MODELS / name / &quot;checkpoint-30&quot; / &quot;trainer_state.json&quot;).read_text())[&quot;log_history&quot;]
-    return [(r[&quot;step&quot;], r[&quot;loss&quot;]) for r in log if &quot;loss&quot; in r], \
-        [(r[&quot;step&quot;], r[&quot;eval_loss&quot;]) for r in log if &quot;eval_loss&quot; in r]
-
-
-def train_run(name: str, rows: list, tok) -&gt; tuple:
-    &quot;&quot;&quot;30단계 학습, 15단계와 30단계 Adapter를 저장한다(15단계 = 제48장의 검증 손실 최저 지점)&quot;&quot;&quot;
-    from common.qwen import load_model
-    from trl import SFTConfig, SFTTrainer
-    if (MODELS / name / &quot;checkpoint-30&quot; / &quot;trainer_state.json&quot;).exists():
-        return history(name)                                     # 이미 학습했으면 기록만 읽는다
-    torch.manual_seed(0)
-    model = load_model()
-    tr, va = SFTDataset(tok, rows), SFTDataset(tok, split_rows(&quot;validation&quot;))
-    cfg = {**SAME_AS_CH46, &quot;learning_rate&quot;: 2e-4, &quot;save_strategy&quot;: &quot;steps&quot;, &quot;save_steps&quot;: 15,
-           &quot;disable_tqdm&quot;: True}
-    trainer = SFTTrainer(model=model, args=SFTConfig(output_dir=str(MODELS / name), use_cpu=True, **cfg),
-                         processing_class=tok, peft_config=lora_config(SCOPES[&quot;모든 Linear&quot;]),
-                         train_dataset=to_hf_dataset(tr), eval_dataset=to_hf_dataset(va))
-    trainer.train()
-    del trainer, model
-    gc.collect()                                                 # 메모리 7GB 환경: 다음 모델 전에 비운다
-    return history(name)
-
-
-def load_adapter(name: str, step: int):
-    from common.qwen import load_model
-    from peft import PeftModel
-    return PeftModel.from_pretrained(load_model(), MODELS / name / f&quot;checkpoint-{step}&quot;).eval()
-
-
-def summary(m: dict, base: dict, c: dict) -&gt; dict:
-    hits, fmts = list(m[&quot;keyword_hit&quot;].values()), list(m[&quot;format_ok&quot;].values())
-    v = judge(c, domain_ratio=m[&quot;domain_ppl&quot;] / base[&quot;domain_ppl&quot;],
-              general_ratio=m[&quot;general_ppl&quot;] / base[&quot;general_ppl&quot;], hits=hits, fmts=fmts)
-    return {&quot;domain_ppl&quot;: m[&quot;domain_ppl&quot;], &quot;general_ppl&quot;: m[&quot;general_ppl&quot;], &quot;keyword&quot;: sum(hits) / len(hits),
-            &quot;format&quot;: sum(fmts) / len(fmts), &quot;passed&quot;: sum(v.values()), &quot;verdict&quot;: v}
+def to_structures(r: dict) -&gt; dict:
+    &quot;&quot;&quot;같은 샘플의 세 가지 구조(02절)&quot;&quot;&quot;
+    prompt = r[&quot;instruction&quot;] + (f&quot;\n\n{r['input']}&quot; if r[&quot;input&quot;] else &quot;&quot;)
+    return {
+        &quot;instruction&quot;: {k: r[k] for k in (&quot;instruction&quot;, &quot;input&quot;, &quot;output&quot;)},
+        &quot;prompt_completion&quot;: {&quot;prompt&quot;: prompt, &quot;completion&quot;: r[&quot;output&quot;]},
+        &quot;messages&quot;: {&quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt},
+                                  {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: r[&quot;output&quot;]}]},
+    }
 
 
 def main() -&gt; None:
-    from common.qwen import load_tokenizer
-    tok = load_tokenizer()
-    c = load_criteria()
-    base = json.loads((ROOT / &quot;examples/ch47/baseline.json&quot;).read_text(encoding=&quot;utf-8&quot;))
+    rows = load()
+    print(f&quot;── 1. 설계 기준 검사({len(rows)}개) ──&quot;)
+    found = problems(rows)
+    print(f&quot;  위반 {len(found)}건&quot; + &quot;&quot;.join(f&quot;\n    {p}&quot; for p in found))
 
-    print(&quot;── 1. 오답 유형표(제48장 LoRA, validation 6문항) ──&quot;)
-    for i, (kind, why, covered) in ERRORS.items():
-        print(f&quot;  {i}  {kind:&lt;6} train 관련 지식 {'있음' if covered else '없음'}  {why}&quot;)
-    kinds = {k: sum(1 for v in ERRORS.values() if v[0] == k) for k in sorted({v[0] for v in ERRORS.values()})}
-    print(f&quot;  유형별: {kinds}, train에 관련 지식이 있는 문항: {[f'{k} ← {v}' for k, v in RELATED.items()]}&quot;)
+    print(&quot;\n── 2. 설계표 대비 분류별 개수 ──&quot;)
+    counts = Counter(r[&quot;category&quot;] for r in rows)
+    for c, n in PLAN.items():
+        print(f&quot;  {c:&lt;12}{counts[c]:&gt;3} / {n}&quot;)
+    print(f&quot;  코드가 있는 샘플(input 사용) {sum(1 for r in rows if r['input'])}개&quot;)
 
-    rows = augmented_rows()
-    print(f&quot;\n── 2. 데이터 보강: train {len(split_rows('train'))} + 질문 변형 {len(rows) - 38} = {len(rows)}개 ──&quot;)
-    print(f&quot;  보강 데이터와 validation·test의 최대 3-gram 유사도 {leak_check(rows):.2f} &lt; {NGRAM_T}&quot;)
+    print(&quot;\n── 3. 길이(글자 수, 토큰 수) ──&quot;)
+    try:
+        from common.qwen import load_tokenizer
+        tok = load_tokenizer()
+        q = [len(tok(r[&quot;instruction&quot;] + r[&quot;input&quot;]).input_ids) for r in rows]
+        a = [len(tok(r[&quot;output&quot;]).input_ids) for r in rows]
+        print(f&quot;  질문 토큰 평균 {sum(q) / len(q):.0f}, 최대 {max(q)} / 답변 토큰 평균 {sum(a) / len(a):.0f}, &quot;
+              f&quot;최대 {max(a)}, 전체 {sum(q) + sum(a):,}&quot;)
+    except Exception as e:
+        print(f&quot;  토크나이저 없음({type(e).__name__}), 글자 수만 계산&quot;)
+    chars = [len(r[&quot;output&quot;]) for r in rows]
+    print(f&quot;  답변 글자 평균 {sum(chars) / len(chars):.0f}, 최소 {min(chars)}, 최대 {max(chars)}&quot;)
 
-    runs = json.loads(RUNS.read_text(encoding=&quot;utf-8&quot;)) if RUNS.exists() else {}
-    for name, data in ((&quot;원본&quot;, split_rows(&quot;train&quot;)), (&quot;보강&quot;, rows)):
-        if name not in runs:
-            train, val = train_run(name, data, tok)
-            runs[name] = {&quot;train&quot;: train, &quot;val&quot;: val}
-            RUNS.write_text(json.dumps(runs, ensure_ascii=False, indent=1) + &quot;\n&quot;, encoding=&quot;utf-8&quot;)
-        for step in (15, 30):
-            key = f&quot;{name}-{step}&quot;
-            if key not in runs:
-                model = load_adapter(name, step)
-                runs[key] = summary(measure(tok, model), base, c)
-                del model
-                gc.collect()
-            RUNS.write_text(json.dumps(runs, ensure_ascii=False, indent=1) + &quot;\n&quot;, encoding=&quot;utf-8&quot;)
-
-    print(&quot;\n── 3. 과적합 판정: 학습·검증 손실(샘플 평균) ──&quot;)
-    for name in (&quot;원본&quot;, &quot;보강&quot;):
-        tr, va = dict(runs[name][&quot;train&quot;]), dict(runs[name][&quot;val&quot;])
-        best = min(va, key=va.get)
-        print(f&quot;  {name}: &quot; + &quot;  &quot;.join(f&quot;{s}단계 {tr[s]:.2f}/{va[s]:.2f}&quot; for s in sorted(va, key=int))
-              + f&quot;  → 검증 최저 {best}단계&quot;)
-
-    print(&quot;\n── 4. 후보 비교(validation, 제43장 기준) ──&quot;)
-    print(&quot;  후보      도메인PPL  일반PPL  핵심어  형식   합격&quot;)
-    cands = [&quot;원본-15&quot;, &quot;원본-30&quot;, &quot;보강-15&quot;, &quot;보강-30&quot;]
-    for k in cands:
-        r = runs[k]
-        print(f&quot;  {k:&lt;8}{r['domain_ppl']:&gt;9.2f}{r['general_ppl']:&gt;9.2f}{r['keyword']:&gt;8.2f}{r['format']:&gt;6.2f}&quot;
-              f&quot;   {r['passed']}/4&quot;)
-    chosen = max(cands, key=lambda k: (runs[k][&quot;passed&quot;], runs[k][&quot;keyword&quot;], -runs[k][&quot;domain_ppl&quot;]))
-    print(f&quot;  선택 규칙: 합격 수 → 핵심어 → 도메인 PPL 순. 확정 모델: {chosen}&quot;)
-
-    print(&quot;\n── 5. 최종 test 평가(확정 모델, 한 번만) ──&quot;)
-    if not FINAL.exists():
-        name, step = chosen.split(&quot;-&quot;)
-        m = measure(tok, load_adapter(name, int(step)), split=&quot;test&quot;)
-        FINAL.write_text(json.dumps({&quot;chosen&quot;: chosen, &quot;result&quot;: m}, ensure_ascii=False, indent=1) + &quot;\n&quot;,
-                         encoding=&quot;utf-8&quot;)
-    final = json.loads(FINAL.read_text(encoding=&quot;utf-8&quot;))
-    m = final[&quot;result&quot;]
-    hits, fmts = list(m[&quot;keyword_hit&quot;].values()), list(m[&quot;format_ok&quot;].values())
-    v = judge(c, domain_ratio=m[&quot;domain_ppl&quot;] / base[&quot;domain_ppl&quot;],
-              general_ratio=m[&quot;general_ppl&quot;] / base[&quot;general_ppl&quot;], hits=hits, fmts=fmts)
-    print(f&quot;  {final['chosen']}: 핵심어 {sum(hits) / len(hits):.2f}, 형식 {sum(fmts) / len(fmts):.2f}&quot;
-          f&quot;(test), 도메인 PPL {m['domain_ppl']:.2f}, 일반 PPL {m['general_ppl']:.2f}&quot;)
-    print(f&quot;  판정 {v} → {sum(v.values())}/4&quot;)
-    for i, a in m[&quot;answers&quot;].items():
-        print(f&quot;  [{i}] 핵심어 {m['keyword_hit'][i]:.2f}  {a[:46].replace(chr(10), ' ')}…&quot;)
+    print(&quot;\n── 4. 같은 샘플(fpga-013)의 세 가지 구조 ──&quot;)
+    sample = next(r for r in rows if r[&quot;id&quot;] == &quot;fpga-013&quot;)
+    for name, s in to_structures(sample).items():
+        print(f&quot;  [{name}]\n  {json.dumps(s, ensure_ascii=False)}&quot;)
 
 
 if __name__ == &quot;__main__&quot;:
     main()
 </code></pre></div>
 <p>실행:</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch50/improve.py
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch41/check_dataset.py
 </code></pre></div>
-<p>실제 실행 결과(교재 검증 환경, CPU 약 40분, 메모리가 부족해 멈추면 다시 실행하면 저장된 결과부터 이어 감, Trainer 기록 줄 생략):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 1. 오답 유형표(제48장 LoRA, validation 6문항) ──
-  fpga-005  사실 오류  train 관련 지식 없음  DSP를 '디지털 소규모 프로그래밍'으로 풀어 지어냄
-  fpga-019  사실 오류  train 관련 지식 없음  generate를 '합성할 때 재사용하는 블록'으로 설명
-  fpga-024  질문 오해  train 관련 지식 없음  몇까지 세야 하는지 계산하지 않고 '어렵다'고 답함
-  fpga-033  사실 오류  train 관련 지식 있음  메타안정성을 '같은 값으로 유지되는 기능'으로 설명
-  fpga-041  사실 오류  train 관련 지식 없음  ILA를 설계 파일 비교 도구처럼 설명, 권유형으로 끝남
-  fpga-049  질문 오해  train 관련 지식 있음  래치를 찾지 못하고 'q가 d보다 클 때'를 문제로 짚음
-  유형별: {'사실 오류': 4, '질문 오해': 2}, train에 관련 지식이 있는 문항: ['fpga-033 ← fpga-032(클럭 도메인 사이 동기화)', 'fpga-049 ← fpga-021(래치가 생기는 원인)']
+<p>실제 실행 결과(교재 검증 환경):</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 1. 설계 기준 검사(50개) ──
+  위반 0건
 
-── 2. 데이터 보강: train 38 + 질문 변형 38 = 76개 ──
-  보강 데이터와 validation·test의 최대 3-gram 유사도 0.33 &lt; 0.5
+── 2. 설계표 대비 분류별 개수 ──
+  개념           10 / 10
+  Verilog 문법   10 / 10
+  설계 기법         8 / 8
+  타이밍           8 / 8
+  도구와 흐름        7 / 7
+  디버깅           7 / 7
+  코드가 있는 샘플(input 사용) 5개
 
-── 3. 과적합 판정: 학습·검증 손실(샘플 평균) ──
-  원본: 5단계 2.75/2.76  10단계 2.46/2.58  15단계 2.12/2.49  20단계 1.87/2.52  25단계 1.72/2.53  30단계 1.63/2.53  → 검증 최저 15단계
-  보강: 5단계 2.75/2.76  10단계 2.55/2.61  15단계 2.25/2.50  20단계 1.92/2.49  25단계 1.74/2.51  30단계 1.78/2.51  → 검증 최저 20단계
+── 3. 길이(글자 수, 토큰 수) ──
+  질문 토큰 평균 19, 최대 59 / 답변 토큰 평균 90, 최대 125, 전체 5,482
+  답변 글자 평균 141, 최소 61, 최대 192
 
-── 4. 후보 비교(validation, 제43장 기준) ──
-  후보      도메인PPL  일반PPL  핵심어  형식   합격
-  원본-15       12.06    21.37    0.00  1.00   3/4
-  원본-30       12.55    21.89    0.04  0.67   2/4
-  보강-15       12.16    21.11    0.00  1.00   3/4
-  보강-30       12.27    21.65    0.00  1.00   3/4
-  선택 규칙: 합격 수 → 핵심어 → 도메인 PPL 순. 확정 모델: 원본-15
-
-── 5. 최종 test 평가(확정 모델, 한 번만) ──
-  원본-15: 핵심어 0.08, 형식 1.00(test), 도메인 PPL 12.06, 일반 PPL 21.37
-  판정 {'domain_ppl': True, 'keyword_hit': False, 'format_ok': True, 'general_ppl': True} → 3/4
-  [fpga-010] 핵심어 0.50  배치는 신호가 연결되는 곳에 위치하는 장치의 위치를 결정하는 도구, 배선은 신호가 …
-  [fpga-018] 핵심어 0.00  명령어나 모듈 이름이 같은 경우, 명령어의 이름이 모듈 이름에 맞춰지는 것을 막아줍…
-  [fpga-022] 핵심어 0.00  FSM의 기본 구조는 4개의 상태, 1개의 입력, 1개의 출력으로 구성됩니다. 각 …
-  [fpga-031] 핵심어 0.00  임계 경로는 신호가 끝나면 정상적으로 작동하는 시점이기 때문에, 신호가 이전에 왔던…
-  [fpga-040] 핵심어 0.00  합성된 모듈의 합성 시간, 합성 파일 이름, 합성 결과, 합성 시스템에 연결한 모든…
-  [fpga-044] 핵심어 0.00  X가 출력으로 하는 신호는 시뮬레이터가 정해진 최대 입력값보다 큰 값이 들어올 때 …
+── 4. 같은 샘플(fpga-013)의 세 가지 구조 ──
+  [instruction]
+  {&quot;instruction&quot;: &quot;아래 코드가 무엇을 하는지 설명해 주세요.&quot;, &quot;input&quot;: &quot;assign y = sel ? b : a;&quot;, &quot;output&quot;: &quot;sel이 1이면 b를, 0이면 a를 y로 내보내는 2대 1 멀티플렉서입니다. 조건 연산자를 이용한 연속 할당이므로 조합 논리로 합성됩니다.&quot;}
+  [prompt_completion]
+  {&quot;prompt&quot;: &quot;아래 코드가 무엇을 하는지 설명해 주세요.\n\nassign y = sel ? b : a;&quot;, &quot;completion&quot;: &quot;sel이 1이면 b를, 0이면 a를 y로 내보내는 2대 1 멀티플렉서입니다. 조건 연산자를 이용한 연속 할당이므로 조합 논리로 합성됩니다.&quot;}
+  [messages]
+  {&quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;아래 코드가 무엇을 하는지 설명해 주세요.\n\nassign y = sel ? b : a;&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;sel이 1이면 b를, 0이면 a를 y로 내보내는 2대 1 멀티플렉서입니다. 조건 연산자를 이용한 연속 할당이므로 조합 논리로 합성됩니다.&quot;}]}
 </code></pre></div>
 <p><strong>결과 읽기</strong></p>
 <ul>
-<li><strong>1번</strong> 오답 유형표에서 6개 중 4개가 사실 오류, 2개가 질문 오해입니다. 더 중요한 것은 오른쪽 열입니다. DSP 블록, generate 문, 1Hz 카운터 계산, ILA는 train에 관련 문항이 <strong>하나도 없습니다.</strong> 메타안정성(fpga-032의 동기화)과 래치(fpga-021)만 관련 지식이 train에 있습니다. 넷은 처음부터 배울 수 없는 질문이었습니다.</li>
-<li><strong>2번</strong>에서 보강 데이터 76개는 validation·test와 3-gram 유사도가 최대 0.33으로 누출이 없습니다.</li>
-<li><strong>3번</strong>에서 원본은 15단계, 보강은 20단계에서 검증 손실이 가장 낮습니다. 보강 데이터는 같은 30단계 동안 각 문항을 덜 반복하므로(76개를 약 3번) 과적합이 늦게 옵니다.</li>
-<li><strong>4번</strong> 후보 비교에서 15단계에서 멈춘 두 후보와 보강-30이 3/4 합격입니다. 형식 준수율이 0.67에서 1.00이 되어 합격했고, 도메인 PPL도 30단계보다 낮습니다. 과적합 전에 멈추는 것은 효과가 있었습니다. 그러나 <strong>핵심어는 네 후보 모두 0.00~0.04로 그대로</strong>입니다. 질문 변형 보강은 핵심어를 높이지 못했습니다. 이 개선은 실패했고, 그대로 기록합니다.</li>
-<li>규칙에 따라 원본-15(합격 3, 핵심어 0.00, 도메인 PPL 12.06)가 보강-15(12.16)를 도메인 PPL 차이로 앞서 확정되었습니다. 차이는 작으며, 6문항 검증으로는 두 후보를 구별하기 어렵다는 것이 정직한 해석입니다.</li>
-<li><strong>5번</strong>에서 확정 모델을 test로 한 번 평가했습니다. 형식 1.00, 핵심어 0.08로 test에서도 3/4 합격, 핵심어 불합격입니다(PPL 두 값은 test가 아니라 기준 정의대로 validation과 고정 eval로 잰 값입니다). 핵심어를 맞힌 것은 fpga-010의 &quot;위치·연결&quot; 두 개뿐이고, 임계 경로·FSM·X 값은 그럴듯한 틀린 설명입니다. 이 결과로 다른 후보를 다시 test하지 않습니다.</li>
-<li>정리하면, 이 데이터 38개로 한 파인튜닝은 <strong>말투와 형식은 가르쳤지만 지식은 가르치지 못했습니다.</strong> 다음 개선은 질문 변형이 아니라 validation에서 드러난 빈 주제(DSP, generate, ILA 같은)를 다루는 <strong>새 문항</strong>을 train에 더하는 것이고, 그 결과는 새로 만든 test로 확인해야 합니다. 모델이 모르는 사실을 답하게 하는 다른 길(검색 결과를 함께 넣어 주는 RAG)도 있습니다.</li>
+<li><strong>1번</strong>에서 필수 항목 누락, 분류 오류, 끝맺음 형식, 코드 질문의 input 누락, 중복이 모두 0건입니다.</li>
+<li><strong>2번</strong>에서 분류별 개수가 설계표와 정확히 같습니다. 코드를 input에 둔 샘플은 5개입니다.</li>
+<li><strong>3번</strong>에서 질문은 평균 19토큰, 답은 평균 90토큰(최대 125토큰)입니다. 질문과 답을 합쳐도 샘플 하나가 Chat Template의 특수 토큰을 더해 200토큰 안팎이므로, 제39장의 시퀀스 256 안에 들어갑니다. 전체 50개는 약 5,500토큰으로, 제3부 고정 데이터(3,289토큰)보다 조금 큽니다.</li>
+<li><strong>4번</strong>은 같은 샘플을 세 구조로 바꾼 것입니다. 내용은 같고 담는 틀만 다릅니다.</li>
 </ul>
-</section><section class="section" id="s08"><h2><span class="num">08</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch50/test_ch50.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제50장 검증 테스트
+</section><section class="section" id="s08"><h2><span class="num">08</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch41/test_ch41.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제41장 검증 테스트
 #
-# 실행: python -m pytest examples/ch50 -q
+# 실행: python -m pytest examples/ch41 -q
 
-import json
+import copy
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from improve import ERRORS, FINAL, NGRAM_T, RUNS, augmented_rows, leak_check  # noqa: E402
+from check_dataset import PLAN, load, problems, to_structures  # noqa: E402
 
-
-def test_augmented_data_is_train_only_and_leak_free():
-    rows = augmented_rows()
-    split = json.loads((HERE.parents[1] / &quot;datasets/fpga_qa/split_v1.json&quot;).read_text(encoding=&quot;utf-8&quot;))[&quot;split&quot;]
-    assert len(rows) == 76 and len({r[&quot;id&quot;] for r in rows}) == 76
-    assert all(split[r[&quot;id&quot;].removesuffix(&quot;-p1&quot;)] == &quot;train&quot; for r in rows)      # 원본이 모두 train
-    assert leak_check(rows) &lt; NGRAM_T
+ROWS = load()
 
 
-def test_error_table_covers_validation():
-    split = json.loads((HERE.parents[1] / &quot;datasets/fpga_qa/split_v1.json&quot;).read_text(encoding=&quot;utf-8&quot;))[&quot;split&quot;]
-    assert sorted(ERRORS) == sorted(i for i, s in split.items() if s == &quot;validation&quot;)
+def test_dataset_passes_all_rules():
+    assert len(ROWS) == 50 and problems(ROWS) == []
 
 
-def test_candidates_recorded_and_final_once():
-    runs = json.loads(RUNS.read_text(encoding=&quot;utf-8&quot;))
-    cands = [&quot;원본-15&quot;, &quot;원본-30&quot;, &quot;보강-15&quot;, &quot;보강-30&quot;]
-    assert all(k in runs and set(runs[k][&quot;verdict&quot;]) == {&quot;domain_ppl&quot;, &quot;keyword_hit&quot;, &quot;format_ok&quot;, &quot;general_ppl&quot;}
-               for k in cands)
-    final = json.loads(FINAL.read_text(encoding=&quot;utf-8&quot;))
-    best = max(cands, key=lambda k: (runs[k][&quot;passed&quot;], runs[k][&quot;keyword&quot;], -runs[k][&quot;domain_ppl&quot;]))
-    assert final[&quot;chosen&quot;] == best                                             # validation 규칙으로 고른 모델
-    assert final[&quot;result&quot;][&quot;split&quot;] == &quot;test&quot; and len(final[&quot;result&quot;][&quot;answers&quot;]) == 6
+def test_checker_catches_violations():
+    bad = copy.deepcopy(ROWS)
+    del bad[0][&quot;output&quot;]                              # 필수 항목 누락
+    bad[1][&quot;category&quot;] = &quot;기타&quot;                       # 설계표에 없는 분류
+    bad[2][&quot;output&quot;] = &quot;답변 끝맺음 없음&quot;             # 문체 위반
+    bad[3][&quot;id&quot;] = bad[4][&quot;id&quot;]                       # id 중복
+    found = &quot; &quot;.join(problems(bad))
+    for word in (&quot;항목 없음&quot;, &quot;설계표에 없는 분류&quot;, &quot;끝나지 않음&quot;, &quot;id 중복&quot;):
+        assert word in found
 
 
-def test_reproduces_ch48():
-    runs = json.loads(RUNS.read_text(encoding=&quot;utf-8&quot;))
-    ch48 = json.loads((HERE.parent / &quot;ch48&quot; / &quot;domain.json&quot;).read_text(encoding=&quot;utf-8&quot;))
-    assert abs(runs[&quot;원본-30&quot;][&quot;domain_ppl&quot;] - ch48[&quot;after&quot;][&quot;domain_ppl&quot;]) &lt; 0.05   # 같은 설정 = 같은 결과
+def test_three_structures_carry_same_content():
+    r = next(x for x in ROWS if x[&quot;input&quot;])
+    s = to_structures(r)
+    assert s[&quot;prompt_completion&quot;][&quot;completion&quot;] == s[&quot;messages&quot;][&quot;messages&quot;][1][&quot;content&quot;] == r[&quot;output&quot;]
+    assert r[&quot;input&quot;] in s[&quot;prompt_completion&quot;][&quot;prompt&quot;]
+    assert [m[&quot;role&quot;] for m in s[&quot;messages&quot;][&quot;messages&quot;]] == [&quot;user&quot;, &quot;assistant&quot;]
+
+
+def test_license_and_card_recorded():
+    root = Path(__file__).resolve().parents[2]
+    lic = (root / &quot;datasets&quot; / &quot;LICENSES.md&quot;).read_text(encoding=&quot;utf-8&quot;)
+    card = (root / &quot;datasets&quot; / &quot;fpga_qa&quot; / &quot;README.md&quot;).read_text(encoding=&quot;utf-8&quot;)
+    assert &quot;fpga_qa.json&quot; in lic and &quot;출처&quot; in card and &quot;라이선스&quot; in card
+    assert all(c in card for c in PLAN)
 </code></pre></div>
 <p>실행:</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch50 -q
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch41 -q
 </code></pre></div>
 <p>실제 실행 결과(교재 검증 환경):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>4 passed in 3.61s
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>....                                                                     [100%]
+4 passed in 0.02s
 </code></pre></div>
 <table>
 <thead>
@@ -1005,45 +971,45 @@ def test_reproduces_ch48():
 </thead>
 <tbody>
 <tr>
-  <td>보강 데이터</td>
-  <td>76개, 원본이 모두 train, 누출 없음</td>
-  <td>통과(최대 0.33)</td>
+  <td>필수 항목</td>
+  <td>50개 모두 다섯 항목이 있고 비어 있지 않음(input 제외)</td>
+  <td>통과(누락 0건)</td>
 </tr>
 <tr>
-  <td>오답 유형표</td>
-  <td>validation 6문항을 모두 분류</td>
+  <td>검사기 동작</td>
+  <td>일부러 만든 누락·분류 오류·문체 위반·id 중복을 모두 찾아냄</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>후보와 확정</td>
-  <td>후보 4개를 기준으로 판정, 규칙대로 고른 모델만 test 평가</td>
-  <td>통과(원본-15)</td>
+  <td>구조 변환</td>
+  <td>세 구조의 답이 원본과 같고, 코드가 prompt에 포함됨</td>
+  <td>통과</td>
 </tr>
 <tr>
-  <td>재현성</td>
-  <td>원본-30이 제48장 결과와 같음</td>
-  <td>통과(12.55)</td>
+  <td>출처·라이선스</td>
+  <td>데이터 설명서와 저장소 데이터 목록에 기록, 설명서에 설계표 수록</td>
+  <td>통과</td>
 </tr>
 <tr>
-  <td>제43장 기준</td>
-  <td>최종 test에서 네 지표 합격</td>
-  <td>3/4(핵심어 불합격, 개선 실패 기록)</td>
+  <td>내용 정확성</td>
+  <td>작성자 검토(기계 검사 대상 아님)</td>
+  <td>교재 작성 시 검토</td>
 </tr>
 </tbody>
 </table>
-<p>이 장의 실습은 CPU 경로(FP32 LoRA)입니다. 교재 검증 환경(메모리 8GB)에서는 한 프로세스에서 학습과 평가를 이어 하면 메모리가 부족해질 수 있어, 결과를 단계마다 저장하고 다시 실행하면 이어 가도록 만들었습니다. GT 1030 경로에서는 제49장의 QLoRA로 같은 절차를 따릅니다(미검증).</p>
-<p><strong>완료 기준:</strong> validation 오답 중 train에 지식이 없던 주제 하나(예: DSP 블록)에 대해 새 문항 2개를 직접 써서 train에 더하고, 원본-15와 같은 설정으로 다시 학습해 그 문항의 핵심어가 바뀌는지 validation으로 확인하며(test는 다시 보지 않음), 테스트 4개를 모두 통과하면 이 장을 마친 것입니다.</p>
+<p>이 장의 실습은 CPU에서 실행하며, CPU와 GT 1030 경로 모두 위 결과가 기준입니다.</p>
+<p><strong>완료 기준:</strong> 설계표에 자신의 관심 분야 분류(예: 통신 인터페이스) 하나를 더해 질의응답 5개를 작성하고, <code>PLAN</code>에 분류를 추가한 뒤 검사를 통과시키며, 데이터 설명서의 샘플 수와 설계표를 갱신하고, 테스트 4개를 모두 통과하면 이 장을 마친 것입니다(원본을 바꿨다면 테스트의 샘플 수도 함께 고칩니다).</p>
 </section><section class="section" id="s09"><h2><span class="num">09</span>핵심 정리</h2><ul>
-<li>학습 전후는 같은 데이터·같은 측정 함수로 비교하고, 도메인 PPL이 좋아져도 핵심어·답 읽기로 사실을 따로 확인합니다.</li>
-<li>학습 손실은 내려가는데 검증 손실이 오르면 과적합입니다. 검증 손실이 가장 낮은 지점에서 멈추면 형식과 PPL이 함께 좋아졌습니다.</li>
-<li>설정과 후보는 validation으로만, 미리 정한 규칙으로 고릅니다. 환각은 도메인 질문으로, 망각은 일반 문장으로 따로 잽니다.</li>
-<li>오답을 유형별로 나누고 train에 그 지식이 있는지 확인합니다. 학습 데이터에 없는 지식은 파인튜닝으로 생기지 않으며, 질문 변형 보강은 핵심어를 높이지 못했습니다.</li>
-<li>확정 모델은 test로 한 번만 평가하고, 결과가 나빠도 다시 고르지 않습니다. 실패한 개선도 결과로 기록합니다.</li>
+<li>SFT는 질문과 모범 답변의 쌍으로 다음 토큰 예측을 학습해, 모델에게 <strong>대답하는 방식</strong>을 가르칩니다.</li>
+<li>데이터는 Instruction·Input·Output, Prompt-Completion, 대화형 구조로 담을 수 있습니다. 원본은 작성·검토가 쉬운 구조 하나로 두고 필요할 때 변환합니다.</li>
+<li>품질 기준은 정확성, 일관성, 형식 통일, 다양성, 중복 없음입니다. 기계로 검사할 수 있는 것은 코드로 검사합니다.</li>
+<li>배포 데이터는 출처와 라이선스를 데이터 설명서와 데이터 목록에 기록합니다. 이 교재의 FPGA 데이터는 새로 작성한 50개입니다.</li>
+<li>쓰기 전에 설계표로 분류와 목표 수를 정하고, 검사로 설계표와의 일치를 확인합니다.</li>
 </ul>
-<p><strong>다음 장 연결:</strong> 제6부에서는 학습한 모델을 저장·병합·변환해 로컬 서비스로 배포합니다. 제51장은 그 첫 단계로, 가중치·Optimizer·학습 상태가 어디에 저장되는지, Safetensors와 Adapter 파일이 어떤 구조이며 원본 모델의 Revision과 어떻게 대응되는지를 확인합니다.</p>
+<p><strong>다음 장 연결:</strong> 제42장에서는 이 데이터를 학습 도구가 다루기 쉬운 JSONL 파일로 바꾸고, Hugging Face Datasets로 불러와 학습·검증·평가로 나누고 변환·저장합니다.</p>
 </section><div class="chapter-links" id="chapter-links"></div></main></div>
 <footer class="footer">LLM 파인튜닝 및 로컬 AI 구현 · v01  · 실습 결과는 실제 환경에서 검증</footer>
-<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v03.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v02.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v02.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v02.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v02.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v02.html"}, {"id": "ch41", "number": 41, "title": "SFT와 데이터셋 설계", "file": "ch41_sft_dataset_v01.html"}, {"id": "ch42", "number": 42, "title": "Hugging Face Datasets", "file": "ch42_hf_datasets_v01.html"}, {"id": "ch43", "number": 43, "title": "정제·분리·평가 지표", "file": "ch43_clean_split_v02.html"}, {"id": "ch44", "number": 44, "title": "Chat Template", "file": "ch44_chat_template_v01.html"}, {"id": "ch45", "number": 45, "title": "토큰화와 Label Masking", "file": "ch45_label_mask_v01.html"}, {"id": "ch46", "number": 46, "title": "PyTorch SFT 학습 루프", "file": "ch46_sft_loop_v01.html"}, {"id": "ch47", "number": 47, "title": "TRL SFTTrainer", "file": "ch47_sft_trainer_v02.html"}, {"id": "ch48", "number": 48, "title": "SFTTrainer + LoRA 실전", "file": "ch48_lora_sft_v02.html"}, {"id": "ch49", "number": 49, "title": "SFTTrainer + QLoRA 실전", "file": "ch49_qlora_sft_v01.html"}, {"id": "ch50", "number": 50, "title": "평가·오답 분석·반복 개선", "file": "ch50_improve_v01.html"}]};</script><script>/*
+<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v03.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v02.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v02.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v02.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v02.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v02.html"}, {"id": "ch41", "number": 41, "title": "SFT와 데이터셋 설계", "file": "ch41_sft_dataset_v02.html"}, {"id": "ch42", "number": 42, "title": "Hugging Face Datasets", "file": "ch42_hf_datasets_v02.html"}, {"id": "ch43", "number": 43, "title": "정제·분리·평가 지표", "file": "ch43_clean_split_v02.html"}, {"id": "ch44", "number": 44, "title": "Chat Template", "file": "ch44_chat_template_v02.html"}, {"id": "ch45", "number": 45, "title": "토큰화와 Label Masking", "file": "ch45_label_mask_v01.html"}, {"id": "ch46", "number": 46, "title": "PyTorch SFT 학습 루프", "file": "ch46_sft_loop_v01.html"}, {"id": "ch47", "number": 47, "title": "TRL SFTTrainer", "file": "ch47_sft_trainer_v03.html"}, {"id": "ch48", "number": 48, "title": "SFTTrainer + LoRA 실전", "file": "ch48_lora_sft_v03.html"}, {"id": "ch49", "number": 49, "title": "SFTTrainer + QLoRA 실전", "file": "ch49_qlora_sft_v02.html"}, {"id": "ch50", "number": 50, "title": "평가·오답 분석·반복 개선", "file": "ch50_improve_v02.html"}]};</script><script>/*
  * 교육용 HTML 공통 동작 — 유지보수용 원본 (STANDARD 4·10.3·10.4)
  * 페이지 본문은 바꾸지 않고 탐색·이전/다음·모바일 메뉴·코드 복사만 덧붙인다.
  * 입력: 페이지의 window.COURSE (tools/guide/build_guides.py가 실제 존재하는 장만 넣음),

@@ -21,7 +21,7 @@ from transformers.utils import logging  # noqa: E402
 
 from baseline import measure  # noqa: E402                         (제47장)
 from sft_loop import SFTDataset, setup, split_rows, validate  # noqa: E402   (제46장)
-from sft_trainer import SAME_AS_CH46, to_hf_dataset  # noqa: E402  (제47장)
+from sft_trainer import SAME_AS_CH46, TMP, to_hf_dataset  # noqa: E402  (제47장)
 
 logging.disable_progress_bar()
 logging.set_verbosity_error()
@@ -43,7 +43,7 @@ def train_lora(model, tok, tr, va, targets: list, **overrides):
     from trl import SFTConfig, SFTTrainer
     torch.manual_seed(0)                                           # LoRA A 초기값 고정
     cfg = {**SAME_AS_CH46, "disable_tqdm": True, **overrides}
-    trainer = SFTTrainer(model=model, args=SFTConfig(output_dir="/tmp/ch48_run", use_cpu=True, **cfg),
+    trainer = SFTTrainer(model=model, args=SFTConfig(output_dir=str(TMP / "ch48_run"), use_cpu=True, **cfg),
                          processing_class=tok, peft_config=lora_config(targets),
                          train_dataset=to_hf_dataset(tr), eval_dataset=to_hf_dataset(va))
     trainer.train()

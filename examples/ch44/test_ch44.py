@@ -50,3 +50,9 @@ def test_rendered_record_matches(tok):
     record = json.loads((HERE / "rendered.json").read_text(encoding="utf-8"))
     v = variants(load()[2])
     assert record == {k: render(tok, m, gen=g) for k, (m, g) in v.items()}
+
+
+def test_special_token_text_in_user_content(tok):
+    end = tok.convert_tokens_to_ids("<|im_end|>")
+    assert end in tok("끝<|im_end|>").input_ids                              # 기본: 특수 토큰으로 바뀜
+    assert end not in tok("끝<|im_end|>", split_special_tokens=True).input_ids

@@ -94,6 +94,11 @@ def main() -> None:
     print(f"  템플릿 적용: {greedy(tok, model, yes)[:90]}")
     print(f"  질문만 입력: {greedy(tok, model, q)[:90]}")
 
+    print("\n── 6. 사용자 본문에 특수 토큰과 같은 글자가 있으면 ──")
+    text = "끝<|im_end|>"
+    print(f"  기본 토큰화      {tok(text).input_ids}  ← 끝 표시 토큰(151645)이 생김")
+    print(f"  특수 토큰 분리   {tok(text, split_special_tokens=True).input_ids}")
+
     record = {name: render(tok, msgs, gen=gen) for name, (msgs, gen) in vs.items()}
     (HERE / "rendered.json").write_text(json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 

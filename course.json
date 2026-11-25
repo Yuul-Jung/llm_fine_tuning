@@ -662,7 +662,7 @@
       "title": "SFT와 데이터셋 설계",
       "subtitle": "SFT와 Instruction Tuning → 데이터 구조 → 데이터 품질 → 출처와 라이선스 → 도메인 설계",
       "slug": "ch41_sft_dataset",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch41.md",
       "tags": [
         "SFT",
@@ -678,7 +678,7 @@
       "title": "Hugging Face Datasets",
       "subtitle": "CSV, JSON, JSONL → Dataset과 DatasetDict → map, filter, select → 저장과 복원",
       "slug": "ch42_hf_datasets",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch42.md",
       "tags": [
         "Datasets",
@@ -712,7 +712,7 @@
       "title": "Chat Template",
       "subtitle": "System·User·Assistant → apply_chat_template → Generation Prompt → 기본 System 문구",
       "slug": "ch44_chat_template",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch44.md",
       "tags": [
         "Chat Template",
@@ -762,7 +762,7 @@
       "title": "TRL SFTTrainer",
       "subtitle": "SFTConfig 대응표 → 자료형 설정 → 버전별 API 변화 → 기준 모델 평가",
       "slug": "ch47_sft_trainer",
-      "version": "v02",
+      "version": "v03",
       "source": "content/ch47.md",
       "tags": [
         "TRL",
@@ -779,7 +779,7 @@
       "title": "SFTTrainer + LoRA 실전",
       "subtitle": "부품 결합 → Target Modules 선정 → 도메인 학습 → 응답 비교",
       "slug": "ch48_lora_sft",
-      "version": "v02",
+      "version": "v03",
       "source": "content/ch48.md",
       "tags": [
         "LoRA",
@@ -796,7 +796,7 @@
       "title": "SFTTrainer + QLoRA 실전",
       "subtitle": "4비트 모델과 PEFT → 메모리 설정 → 실전 데이터 메모리 분석 → LoRA와 QLoRA 비교",
       "slug": "ch49_qlora_sft",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch49.md",
       "tags": [
         "QLoRA",
@@ -813,7 +813,7 @@
       "title": "평가·오답 분석·반복 개선",
       "subtitle": "기준값 비교 → 과적합 판정 → 하이퍼파라미터 조정 → 환각과 망각 → 오답 분석과 재학습 → 최종 Test",
       "slug": "ch50_improve",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch50.md",
       "tags": [
         "오답 분석",
