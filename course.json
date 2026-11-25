@@ -857,6 +857,23 @@
         "PPL",
         "CPU"
       ]
+    },
+    {
+      "id": "ch53",
+      "number": 53,
+      "title": "가중치 추출과 분석",
+      "subtitle": "Named Parameters → Weight Tying 확인 → NumPy·CSV·Binary·HEX → 자료형과 Byte Order",
+      "slug": "ch53_export",
+      "version": "v01",
+      "source": "content/ch53.md",
+      "tags": [
+        "named_parameters",
+        "Weight Tying",
+        "HEX",
+        "Binary",
+        "Byte Order",
+        "readmemh"
+      ]
     }
   ]
 }
