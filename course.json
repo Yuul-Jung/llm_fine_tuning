@@ -925,6 +925,23 @@
         "Verilog",
         "Testbench"
       ]
+    },
+    {
+      "id": "ch60",
+      "number": 60,
+      "title": "도메인 특화 로컬 LLM 종합 프로젝트",
+      "subtitle": "요구사항과 데이터 → 학습 → 병합·변환·배포 → 최종 평가와 재현성",
+      "slug": "ch60_project",
+      "version": "v01",
+      "source": "content/ch60.md",
+      "tags": [
+        "종합 프로젝트",
+        "재현성",
+        "해시",
+        "Seed",
+        "배포",
+        "기록"
+      ]
     }
   ]
 }

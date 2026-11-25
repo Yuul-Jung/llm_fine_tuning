@@ -1,0 +1,90 @@
+{
+ "project": "FPGA 질의응답 로컬 LLM",
+ "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+ "base_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+ "hashes": {
+  "데이터 원본": "0970ba16f2036082",
+  "분할": "7ec3428c1f6f3226",
+  "보강": "8e97003967f1a568",
+  "평가 기준": "6cb5d55cd7737cca",
+  "배포용 Adapter": "1850ae6b01ba5522",
+  "병합 모델": "05583f7fa8327839"
+ },
+ "versions": {
+  "python": "3.13.18",
+  "torch": "2.15.0+cpu",
+  "transformers": "5.24.0",
+  "peft": "0.22.0",
+  "trl": "1.18.2",
+  "datasets": "5.2.0"
+ },
+ "seed": 0,
+ "device": "cpu",
+ "training": {
+  "method": "LoRA r 8, alpha 16, 모든 Linear",
+  "lr": 0.0002,
+  "steps": 15,
+  "batch": "4 × 누적 2",
+  "max_length": 256,
+  "loss": "Completion-only"
+ },
+ "final_test": {
+  "chosen": "원본-15",
+  "keyword": 0.08333333333333333,
+  "format": 1.0,
+  "domain_ppl": 12.058739993348576,
+  "general_ppl": 21.368799614112,
+  "adopted": false
+ },
+ "stages": [
+  {
+   "stage": "요구사항·데이터·기준",
+   "chapters": "제41~43장",
+   "state": "완료"
+  },
+  {
+   "stage": "학습(0.5B FP32 LoRA, Tiny 비교)",
+   "chapters": "제46~48장",
+   "state": "완료"
+  },
+  {
+   "stage": "학습(0.5B QLoRA, GT 1030 경로)",
+   "chapters": "제49장",
+   "state": "CPU 경로 완료, GT 1030 미검증"
+  },
+  {
+   "stage": "오답 분석·최종 평가",
+   "chapters": "제50장",
+   "state": "완료(배포 후보 불채택)"
+  },
+  {
+   "stage": "저장·병합",
+   "chapters": "제51·52장",
+   "state": "완료"
+  },
+  {
+   "stage": "GGUF 변환·양자화",
+   "chapters": "제54·55장",
+   "state": "미작성(변환 도구 설치 허가 대기)"
+  },
+  {
+   "stage": "Ollama 배포",
+   "chapters": "제56장",
+   "state": "미작성(허가 대기)"
+  },
+  {
+   "stage": "API",
+   "chapters": "제57장",
+   "state": "완료(교재 서버), 실제 Ollama 미검증"
+  },
+  {
+   "stage": "장치별 실행",
+   "chapters": "제58장",
+   "state": "계산·CPU 실측 완료, GT 1030·Raspberry Pi 미검증"
+  }
+ ],
+ "reproduced": {
+  "training_loss_same": true,
+  "merged_ppl": 12.058741978726225
+ }
+}
