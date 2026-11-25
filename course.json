@@ -876,6 +876,23 @@
       ]
     },
     {
+      "id": "ch54",
+      "number": 54,
+      "title": "Safetensors → GGUF 변환",
+      "subtitle": "GGUF 구조 → llama.cpp 도구 → 원본 자료형 유지 변환 → Logits 비교 검증",
+      "slug": "ch54_gguf",
+      "version": "v01",
+      "source": "content/ch54.md",
+      "tags": [
+        "GGUF",
+        "llama.cpp",
+        "변환",
+        "메타데이터",
+        "Logits 비교",
+        "생성 설정"
+      ]
+    },
+    {
       "id": "ch57",
       "number": 57,
       "title": "로컬 LLM API 서비스",

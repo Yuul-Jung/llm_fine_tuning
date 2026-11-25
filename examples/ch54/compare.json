@@ -1,0 +1,21 @@
+{
+ "tiny-f32": {
+  "token_ids_same": true,
+  "logits_max_diff": 0.0,
+  "greedy_same": true,
+  "repetition_penalty": null
+ },
+ "fpga-f32": {
+  "token_ids_same": true,
+  "logits_max_diff": 0.0,
+  "greedy_same": true,
+  "repetition_penalty": 1.1,
+  "greedy_same_without_config": false
+ },
+ "fpga-f16": {
+  "token_ids_same": true,
+  "logits_max_diff": 0.03887128829956055,
+  "greedy_same": true,
+  "repetition_penalty": 1.1
+ }
+}
