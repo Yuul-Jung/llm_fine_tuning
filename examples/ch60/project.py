@@ -31,6 +31,8 @@ FILES = {                                       # 저장소에 들어 있는 입
 ARTIFACTS = {                                   # 저장소 밖(models/)의 산출물
     "배포용 Adapter": "models/fpga_lora_v1/adapter_model.safetensors",
     "병합 모델": "models/fpga_merged_v1/model.safetensors",
+    "배포 GGUF(Q8_0)": "models/gguf/fpga-q8_0.gguf",
+    "Modelfile": "models/gguf/Modelfile",
 }
 STAGES = [                                      # (단계, 장, 상태)
     ("요구사항·데이터·기준", "제41~43장", "완료"),
@@ -38,8 +40,8 @@ STAGES = [                                      # (단계, 장, 상태)
     ("학습(0.5B QLoRA, GT 1030 경로)", "제49장", "CPU 경로 완료, GT 1030 미검증"),
     ("오답 분석·최종 평가", "제50장", "완료(배포 후보 불채택)"),
     ("저장·병합", "제51·52장", "완료"),
-    ("GGUF 변환·양자화", "제54·55장", "미작성(변환 도구 설치 허가 대기)"),
-    ("Ollama 배포", "제56장", "미작성(허가 대기)"),
+    ("GGUF 변환·양자화", "제54·55장", "완료(Q8_0 선정), llama.cpp 실행·속도 미검증"),
+    ("Ollama 배포", "제56장", "Modelfile 완료, Ollama 등록·응답·GPU 적재 미검증"),
     ("API", "제57장", "완료(교재 서버), 실제 Ollama 미검증"),
     ("장치별 실행", "제58장", "계산·CPU 실측 완료, GT 1030·Raspberry Pi 미검증"),
 ]
@@ -83,7 +85,7 @@ def main() -> None:
     print("── 1. 입력과 산출물의 지문(SHA-256 앞 16자리) ──")
     hashes = {k: sha(ROOT / v) for k, v in {**FILES, **ARTIFACTS}.items()}
     for k, v in hashes.items():
-        print(f"  {k:<12}{v}")
+        print(f"  {k}: {v}")
     manifest = json.loads((ROOT / "examples/ch51/manifest.json").read_text(encoding="utf-8"))
     same = manifest["adapter_sha256"].startswith(hashes["배포용 Adapter"])
     print(f"  배포용 Adapter 해시 = 제51장 대응 기록: {same}")

@@ -8,7 +8,9 @@
   "보강": "8e97003967f1a568",
   "평가 기준": "6cb5d55cd7737cca",
   "배포용 Adapter": "1850ae6b01ba5522",
-  "병합 모델": "05583f7fa8327839"
+  "병합 모델": "05583f7fa8327839",
+  "배포 GGUF(Q8_0)": "dcb6f266d8346002",
+  "Modelfile": "2e8423aa99627499"
  },
  "versions": {
   "python": "3.13.18",
@@ -65,12 +67,12 @@
   {
    "stage": "GGUF 변환·양자화",
    "chapters": "제54·55장",
-   "state": "미작성(변환 도구 설치 허가 대기)"
+   "state": "완료(Q8_0 선정), llama.cpp 실행·속도 미검증"
   },
   {
    "stage": "Ollama 배포",
    "chapters": "제56장",
-   "state": "미작성(허가 대기)"
+   "state": "Modelfile 완료, Ollama 등록·응답·GPU 적재 미검증"
   },
   {
    "stage": "API",

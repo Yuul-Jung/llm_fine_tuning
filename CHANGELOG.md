@@ -9,11 +9,14 @@
 - 제59장(선택) INT8 MAC RTL과 Testbench(`examples/ch59/rtl/`), 사이클 단위 파이썬 모델
 - 프로젝트 기록 `examples/ch60/project.json`
 
-### 미작성
-- 제54~56장(GGUF 변환, 추론용 양자화, Ollama 배포): 변환 도구 설치 허가 대기
+### 추가(사용자 허가 후)
+- 제54장 GGUF 변환기(`examples/ch54/to_gguf.py`), 제55장 Q8_0·Q4_0 양자화 비교, 제56장 Ollama Modelfile
+- requirements에 gguf 0.19.0 고정
 
 ### 변경(제6부 적대적 검증 반영, `design/검증보고서_제6부.md`)
 - 제46장 v02, 제47·48장 v04, 제50장 v03: 실습 장치를 `select_device()`로 결정(제47장 `train_device()`: VRAM이 부족하면 CPU)
+- 제47장 v05: Greedy 평가에 생성 설정의 반복 억제 1.1이 함께 적용됨을 명시
+- 제54장 v02(양자화 경로), 제58장 v02(실제 GGUF 크기), 제60장 v02(상태표에 GGUF·Modelfile)
 
 ## 2026-11-25 (제5부)
 

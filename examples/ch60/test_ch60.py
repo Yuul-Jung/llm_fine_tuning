@@ -32,4 +32,4 @@ def test_final_and_unverified_items_are_explicit():
     r = rec()
     assert r["final_test"]["adopted"] is False and r["final_test"]["chosen"] == "원본-15"
     states = " ".join(s for _, _, s in STAGES)
-    assert "미검증" in states and "허가 대기" in states
+    assert "미검증" in states

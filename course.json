@@ -762,7 +762,7 @@
       "title": "TRL SFTTrainer",
       "subtitle": "SFTConfig 대응표 → 자료형 설정 → 버전별 API 변화 → 기준 모델 평가",
       "slug": "ch47_sft_trainer",
-      "version": "v04",
+      "version": "v05",
       "source": "content/ch47.md",
       "tags": [
         "TRL",
@@ -949,7 +949,7 @@
       "title": "온디바이스 AI",
       "subtitle": "클라우드·로컬·엣지 → 메모리 제약과 KV Cache → 장치별 실행 → 측정과 선정 기준",
       "slug": "ch58_ondevice",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch58.md",
       "tags": [
         "온디바이스",
@@ -983,7 +983,7 @@
       "title": "도메인 특화 로컬 LLM 종합 프로젝트",
       "subtitle": "요구사항과 데이터 → 학습 → 병합·변환·배포 → 최종 평가와 재현성",
       "slug": "ch60_project",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch60.md",
       "tags": [
         "종합 프로젝트",

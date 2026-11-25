@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="클라우드·로컬·엣지 → 메모리 제약과 KV Cache → 장치별 실행 → 측정과 선정 기준"><title>제58장 · 온디바이스 AI · LLM 파인튜닝 및 로컬 AI 구현</title>
+<meta name="description" content="요구사항과 데이터 → 학습 → 병합·변환·배포 → 최종 평가와 재현성"><title>제60장 · 도메인 특화 로컬 LLM 종합 프로젝트 · LLM 파인튜닝 및 로컬 AI 구현</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>/*
@@ -576,11 +576,11 @@ pre code {
     height: auto;
   }
 }
-</style></head><body data-chapter="ch58">
+</style></head><body data-chapter="ch60">
 <button type="button" class="mobile-menu" id="mobile-menu" aria-controls="course-nav" aria-expanded="false">☰ 장·목차</button><div class="shade" id="shade"></div>
-<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 58</p><h1>제58장 · 온디바이스 AI</h1><p>클라우드·로컬·엣지 → 메모리 제약과 KV Cache → 장치별 실행 → 측정과 선정 기준</p><div class="chips"><span class="chip">온디바이스</span><span class="chip">KV Cache</span><span class="chip">메모리 예산</span><span class="chip">Q8_0</span><span class="chip">Q4_0</span><span class="chip">측정 조건</span></div></div></header>
-<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>지금까지 모델은 메모리 8GB의 교재 검증 컴퓨터에서 실행했습니다. 실제로 모델을 쓰는 곳은 더 작은 장치일 수 있습니다. 그래픽 메모리 2GB의 GT 1030, 메모리 4GB의 Raspberry Pi, 인터넷이 없는 현장의 작은 컴퓨터입니다. <strong>온디바이스 AI</strong>는 데이터를 기기 밖으로 보내지 않고 그 기기 안에서 모델을 실행하는 것이며, 가장 먼저 부딪히는 벽은 메모리입니다.</p>
-<p>이 장은 모델 실행에 필요한 메모리를 가중치와 KV Cache로 나눠 계산하고, 장치별로 어떤 형식과 문맥 길이까지 실을 수 있는지 판정합니다. 그리고 교재 검증 CPU에서 속도와 메모리를 측정 조건과 함께 기록해, 계산값과 실측값을 맞춰 봅니다.</p>
+<header class="hero"><div class="hero-inner"><p class="kicker">LLM FINE-TUNING · CHAPTER 60</p><h1>제60장 · 도메인 특화 로컬 LLM 종합 프로젝트</h1><p>요구사항과 데이터 → 학습 → 병합·변환·배포 → 최종 평가와 재현성</p><div class="chips"><span class="chip">종합 프로젝트</span><span class="chip">재현성</span><span class="chip">해시</span><span class="chip">Seed</span><span class="chip">배포</span><span class="chip">기록</span></div></div></header>
+<div class="wrap"><nav class="toc" id="course-nav" aria-label="장과 절 탐색"></nav><main class="content" id="main-content"><section class="section" id="s00"><h2><span class="num">00</span>장 개요</h2><p>마지막 장입니다. 제41장부터 만든 것들, 곧 데이터, 평가 기준, 학습, 오답 분석, 저장·병합, API를 <strong>하나의 프로젝트</strong>로 묶습니다. 한 번 실행해 결과가 나온 것만으로는 프로젝트가 끝나지 않습니다. 다른 사람이 같은 저장소를 받아 같은 절차를 따라 했을 때 같은 결과를 얻을 수 있어야 하고, 무엇이 확인되었고 무엇이 아직 확인되지 않았는지가 분명해야 합니다.</p>
+<p>이 장은 프로젝트의 입력과 산출물에 지문(해시)을 붙이고, 판 번호·Seed·설정·결과를 한 장의 기록으로 남기며, 학습과 평가를 다시 실행해 기록과 같은 결과가 나오는지 확인합니다. 그리고 단계마다 완료·미검증을 정직하게 표시합니다.</p>
 <table>
 <thead>
 <tr>
@@ -591,281 +591,341 @@ pre code {
 <tbody>
 <tr>
   <td>핵심 질문</td>
-  <td>어떤 장치에서 어떤 모델을 얼마나 긴 문맥으로 실행할 수 있는지 어떻게 미리 판정하는가</td>
+  <td>데이터부터 API까지의 과정을 다른 사람이 재현할 수 있게 하려면 무엇을 남겨야 하는가</td>
 </tr>
 <tr>
   <td>실습 결과물</td>
-  <td>문맥 길이별 KV Cache, 형식별 가중치 크기, 장치별 탑재 판정, CPU 속도·메모리 실측과 계산 대조</td>
+  <td>입력·산출물 해시, 단계별 상태표, 학습·평가 재현 확인, API 연결 확인, 프로젝트 기록 파일</td>
 </tr>
 <tr>
   <td>실습 파일</td>
-  <td><code>examples/ch58/</code>의 <code>ondevice.py</code>, <code>test_ch58.py</code>, <code>measure.json</code></td>
+  <td><code>examples/ch60/</code>의 <code>project.py</code>, <code>test_ch60.py</code>, <code>project.json</code></td>
 </tr>
 <tr>
   <td>선수 장</td>
-  <td>제20장(KV Cache), 제33~36장(양자화 형식), 제52장(병합 모델)</td>
+  <td>제41~53장, 제57·58장</td>
 </tr>
 </tbody>
 </table>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>필요한 메모리 = 가중치(파라미터 수 × 형식의 평균 비트) + KV Cache(토큰당 바이트 × 문맥 길이) + 연산 버퍼·운영체제
-판정: 필요한 메모리 ≤ 장치 메모리 × 75%     (25%는 운영체제·연산 버퍼·단편화 몫)
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>요구사항 → 데이터(fpga_qa) → 분할(split_v1) → 기준(eval_criteria v2) → 기준값(제47장)
+   → 학습(LoRA, 15단계) → 오답 분석·test 1회(제50장) → Adapter(Revision 기록) → 병합 → API
+   └ 기록: 해시 · 라이브러리 판 · Seed · 설정 · 결과 · 단계별 상태(완료 / 미검증)
 </code></pre></div>
-</section><section class="section" id="s01"><h2><span class="num">01</span>클라우드·로컬·엣지</h2><table>
-<thead>
-<tr>
-  <th>실행 위치</th>
-  <th>데이터</th>
-  <th>제약</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td>클라우드</td>
-  <td>외부 서버로 보낸다</td>
-  <td>네트워크·비용·데이터 반출 규정</td>
-</tr>
-<tr>
-  <td>로컬(PC·사내 서버)</td>
-  <td>조직 안에 머문다</td>
-  <td>장비 성능, 직접 운영</td>
-</tr>
-<tr>
-  <td>엣지(작은 기기)</td>
-  <td>기기 안에 머문다</td>
-  <td>메모리·전력·발열이 가장 빡빡하다</td>
-</tr>
-</tbody>
-</table>
-<p>로컬과 엣지 실행의 장점은 데이터가 밖으로 나가지 않고, 네트워크 없이도 동작하며, 응답 시간이 일정하다는 것입니다. 대가는 장치의 메모리와 연산 속도에 맞춰 모델 크기, 형식, 문맥 길이를 줄여야 한다는 점입니다. 그래서 실행 전에 &quot;실을 수 있는가&quot;를 계산으로 먼저 판정합니다.</p>
-</section><section class="section" id="s02"><h2><span class="num">02</span>메모리 제약과 KV Cache</h2><p>추론 메모리의 큰 몫은 둘입니다. <strong>가중치</strong>는 모델이 정해지면 고정이고, <strong>KV Cache</strong>는 대화가 길어질수록 커집니다(제20장). 토큰 하나를 처리할 때마다 모든 층이 그 토큰의 Key와 Value를 저장해 두기 때문입니다.</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>KV Cache(바이트) = 2(K, V) × 층 수 × KV 헤드 수 × head_dim × 자료형 바이트 × 토큰 수
-</code></pre></div>
-<p>Qwen2.5-0.5B는 KV 헤드가 2개뿐이라(GQA) 토큰당 KV Cache가 작습니다. 가중치 형식은 제33~36장의 양자화와 같은 원리이며, 로컬 실행 도구의 대표 형식은 32개씩 묶은 블록마다 Scale을 둡니다.</p>
+</section><section class="section" id="s01"><h2><span class="num">01</span>요구사항과 데이터</h2><p>프로젝트는 &quot;무엇을 잘하는 모델을 만들 것인가&quot;를 문장으로 정하는 데서 시작합니다. 이 교재의 프로젝트는 <strong>FPGA·Verilog 질문에 짧은 존댓말로 정확히 답하는 로컬 모델</strong>이었습니다. 이 요구사항이 데이터와 기준을 정했습니다.</p>
 <table>
 <thead>
 <tr>
-  <th>형식</th>
-  <th>블록 구조(32개당)</th>
-  <th>평균 비트</th>
+  <th>요구사항</th>
+  <th>데이터·기준으로 바뀐 것</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>Q8_0</td>
-  <td>INT8 32개 + FP16 Scale 1개 = 34바이트</td>
-  <td>8.5</td>
+  <td>FPGA·Verilog 질문</td>
+  <td>6개 분류 50문항, 분류마다 validation·test 1개(제41·43장)</td>
 </tr>
 <tr>
-  <td>Q4_0</td>
-  <td>4비트 32개 + FP16 Scale 1개 = 18바이트</td>
-  <td>4.5</td>
+  <td>짧은 존댓말</td>
+  <td>답 1~4문장, 형식 준수율 기준 0.80(제43장)</td>
+</tr>
+<tr>
+  <td>정확한 내용</td>
+  <td>문항별 핵심어, 적중률 기준 0.60(제43장)</td>
+</tr>
+<tr>
+  <td>원래 능력 유지</td>
+  <td>일반 PPL 10% 이내 상승(제43장)</td>
+</tr>
+<tr>
+  <td>로컬 실행</td>
+  <td>0.5B 모델, CPU·GT 1030 경로(제47~49장)</td>
 </tr>
 </tbody>
 </table>
-<p>Scale을 블록마다 두므로 평균 비트는 8과 4보다 조금 큽니다. 이 장의 가중치 크기는 이 구조로 계산한 값이며, 실제 파일은 머리말과 일부 층의 다른 형식 때문에 조금 다를 수 있습니다(제54·55장에서 실제 파일로 확인할 예정, 현재 미검증).</p>
-</section><section class="section" id="s03"><h2><span class="num">03</span>장치별 실행</h2><p>장치마다 쓸 수 있는 메모리에서 운영체제와 연산 버퍼 몫(이 장은 25%로 둠)을 빼고, 가중치와 KV Cache가 그 안에 들어가는지 봅니다. 판정은 메모리만 따진 것이며, 들어간다고 빠른 것은 아닙니다. 예를 들어 GT 1030은 FP16 가중치가 메모리에 들어가도 FP16 연산이 FP32의 1/64 속도라(제32장) FP16으로 계산하면 매우 느립니다. 양자화 형식은 실행 도구가 정수 연산이나 FP32로 계산하므로 이 문제를 피할 수 있습니다(구체적인 계산 방식은 실행 도구와 GPU 세대에 따라 다르며, GT 1030에서의 속도는 미검증).</p>
-<p>교재 검증 환경에는 GT 1030과 Raspberry Pi가 없으므로, 이 장의 장치별 실행은 계산으로 판정하고 실측은 CPU에서만 했습니다. 다른 장치에서 같은 측정을 하면 같은 형식의 표로 결과를 비교할 수 있습니다.</p>
-</section><section class="section" id="s04"><h2><span class="num">04</span>측정과 선정 기준</h2><p>속도와 메모리는 측정 조건에 따라 크게 달라지므로, 숫자와 함께 조건을 반드시 기록합니다.</p>
+<p>데이터와 기준은 학습 전에 확정하고, 바꿀 때는 판 번호와 이유를 남겼습니다(기준 파일 version 2, 제43장). 다른 주제로 같은 프로젝트를 할 때도 순서는 같습니다. 요구사항을 문장으로, 그 문장을 데이터 설계와 측정 가능한 기준으로 바꾼 뒤에 학습합니다.</p>
+</section><section class="section" id="s02"><h2><span class="num">02</span>학습</h2><p>설계상 기본 경로는 작은 Qwen2-Tiny의 도메인 SFT이고, GT 1030 경로는 Qwen2.5-0.5B QLoRA입니다. 이 교재의 실제 진행은 다음과 같았습니다.</p>
 <table>
 <thead>
 <tr>
-  <th>기록할 것</th>
-  <th>이유</th>
+  <th>경로</th>
+  <th>장</th>
+  <th>결과</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-  <td>장치·스레드 수·라이브러리 판</td>
-  <td>같은 모델도 환경에 따라 속도가 몇 배 달라진다</td>
+  <td>Qwen2-Tiny 전체 학습·LoRA 비교</td>
+  <td>제46·48장</td>
+  <td>루프와 범위 비교 확인. 한국어 사전학습이 없어 답 품질은 낮음</td>
 </tr>
 <tr>
-  <td>문맥 길이와 생성 토큰 수</td>
-  <td>문맥이 길수록 토큰당 계산과 KV Cache가 늘어난다</td>
+  <td>0.5B FP32 LoRA(CPU)</td>
+  <td>제48·50장</td>
+  <td>확정 모델(원본-15)</td>
 </tr>
 <tr>
-  <td>예열 여부</td>
-  <td>첫 실행은 메모리 할당 때문에 느리다</td>
-</tr>
-<tr>
-  <td>메모리 측정 방법</td>
-  <td>파일을 메모리에 연결만 해 두는 방식(mmap)은 읽기 전까지 메모리를 덜 쓴 것처럼 보인다</td>
+  <td>0.5B QLoRA(CPU 경로)</td>
+  <td>제49장</td>
+  <td>LoRA와 비교. GT 1030 실측은 미검증</td>
 </tr>
 </tbody>
 </table>
-<p>모델을 고를 때는 <strong>품질 기준을 먼저 통과한 것 중에서</strong> 장치에 들어가고 속도 요구를 만족하는 가장 작은 형식을 고릅니다. 속도가 빨라도 품질 기준(제43장)을 넘지 못하면 후보가 아닙니다. 형식별 품질은 제55장에서 비교합니다.</p>
-</section><section class="section" id="s05"><h2><span class="num">05</span>핵심 실습</h2><p>파일명: <code>examples/ch58/ondevice.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제58장 핵심 실습: 장치별 메모리 예산(가중치 + KV Cache + 여유)을 계산하고, CPU에서 속도·메모리를 측정한다
+<p>어느 경로든 학습 설정(학습률, 단계, 묶음, 최대 길이, Loss 정책), Seed, 라이브러리 판을 기록해야 같은 결과를 다시 얻을 수 있습니다. 이 교재는 모든 난수에 Seed 0을 쓰고, 라이브러리 판을 <code>requirements/</code>에 고정했습니다.</p>
+</section><section class="section" id="s03"><h2><span class="num">03</span>병합·변환·배포</h2><p>확정 모델은 Adapter로 저장하며 원본 Revision을 기록하고(제51장), 원본에 병합해 독립 모델로 만들었습니다(제52장). 이어서 병합 모델을 GGUF로 바꾸고(제54장), 형식별 품질을 비교해 GT 1030용으로 Q8_0을 골랐으며(제55장), 학습·평가 조건을 옮긴 Ollama Modelfile을 만들었습니다(제56장). API는 교재의 로컬 서버(Ollama와 같은 요청 형식)로 연결해 확인했습니다(제57장).</p>
+<p>교재 검증 환경에는 llama.cpp와 Ollama가 없어, <strong>GGUF를 실행 도구로 실제 실행하고 Ollama에 등록하는 단계는 미검증입니다.</strong> GGUF 파일 자체는 다시 읽어 원본과 같은 Logits·품질을 확인했으므로, 남은 확인은 실행 도구가 같은 답을 내는지와 GT 1030에서의 속도·메모리입니다. 이렇게 확인한 것과 하지 못한 것을 나눠 상태표에 적는 것도 프로젝트 기록의 일부입니다.</p>
+</section><section class="section" id="s04"><h2><span class="num">04</span>최종 평가와 재현성</h2><p>최종 성능은 학습과 모델 선택에 쓰지 않은 test로 한 번 잰 값만 보고합니다(제50장). 이 프로젝트의 확정 모델은 형식(1.00)과 PPL 기준은 통과했지만 핵심어(0.08)는 통과하지 못해 <strong>배포 후보로 채택하지 않았고</strong>, 실습 절차는 끝까지 완료했습니다.</p>
+<p>재현성은 세 겹으로 남깁니다.</p>
+<table>
+<thead>
+<tr>
+  <th>남길 것</th>
+  <th>이 장의 방법</th>
+  <th>확인</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>입력이 같은가</td>
+  <td>데이터·분할·보강·기준 파일의 해시</td>
+  <td>테스트가 저장소의 현재 파일과 대조</td>
+</tr>
+<tr>
+  <td>과정이 같은가</td>
+  <td>Seed, 설정, 라이브러리 판</td>
+  <td>같은 Seed로 두 번 학습해 손실 비교</td>
+</tr>
+<tr>
+  <td>결과가 같은가</td>
+  <td>산출물 해시, 기록된 지표</td>
+  <td>병합 모델의 PPL을 다시 계산해 기록과 비교</td>
+</tr>
+</tbody>
+</table>
+<p>모델 가중치처럼 큰 산출물은 저장소에 넣지 않으므로(models/), 해시와 다시 만드는 절차를 남겨 받은 쪽이 같은 파일인지 확인할 수 있게 합니다.</p>
+</section><section class="section" id="s05"><h2><span class="num">05</span>핵심 실습</h2><p>파일명: <code>examples/ch60/project.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제60장 핵심 실습: 데이터부터 API까지 전 과정의 산출물을 한 장의 기록으로 묶고, 재현성을 다시 확인한다
 #
-# 실행: python examples/ch58/ondevice.py   (제52장의 병합 모델 필요, CPU 약 2분)
+# 실행: python examples/ch60/project.py   (앞 장의 산출물 필요, CPU 약 3분)
 #
-# GGUF 형식의 크기는 블록 구조로 계산한 값이다(Q8_0: 32개당 34바이트, Q4_0: 32개당 18바이트).
-# llama.cpp·GT 1030·Raspberry Pi 실측은 교재 검증 환경에서 하지 않았다(미검증).
+# 만드는 파일: examples/ch60/project.json(프로젝트 기록: 판 번호·해시·Seed·설정·결과·미검증 항목)
 
+import hashlib
 import json
+import math
 import platform
-import resource
 import sys
-import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-for p in (HERE.parent, HERE.parent / &quot;ch20&quot;):
+for p in (HERE.parent, HERE.parent / &quot;ch43&quot;, HERE.parent / &quot;ch44&quot;, HERE.parent / &quot;ch46&quot;, HERE.parent / &quot;ch57&quot;):
     sys.path.insert(0, str(p))
 
 import torch  # noqa: E402
 
 from common.device import select_device  # noqa: E402
-from sampling_kv import kv_bytes_per_token  # noqa: E402        (제20장)
+from common.models import QWEN_ID, QWEN_REVISION  # noqa: E402
 
-MERGED = ROOT / &quot;models&quot; / &quot;fpga_merged_v1&quot;
-OUT = HERE / &quot;measure.json&quot;
-MiB = 2 ** 20
-BITS = {&quot;FP32&quot;: 32, &quot;FP16&quot;: 16, &quot;Q8_0&quot;: 34 * 8 / 32, &quot;Q4_0&quot;: 18 * 8 / 32}     # 가중치 하나당 평균 비트
-DEVICES = {&quot;GT 1030&quot;: 2048, &quot;Raspberry Pi 4GB&quot;: 4096, &quot;교재 CPU 8GB&quot;: 8192}  # 쓸 수 있는 메모리 MiB
-RESERVE = 0.25                                                                 # 운영체제·연산 버퍼 몫
+OUT = HERE / &quot;project.json&quot;
+FILES = {                                       # 저장소에 들어 있는 입력(데이터·기준)
+    &quot;데이터 원본&quot;: &quot;datasets/fpga_qa/fpga_qa.json&quot;,
+    &quot;분할&quot;: &quot;datasets/fpga_qa/split_v1.json&quot;,
+    &quot;보강&quot;: &quot;datasets/fpga_qa/augment_v1.json&quot;,
+    &quot;평가 기준&quot;: &quot;configs/eval_criteria.yaml&quot;,
+}
+ARTIFACTS = {                                   # 저장소 밖(models/)의 산출물
+    &quot;배포용 Adapter&quot;: &quot;models/fpga_lora_v1/adapter_model.safetensors&quot;,
+    &quot;병합 모델&quot;: &quot;models/fpga_merged_v1/model.safetensors&quot;,
+    &quot;배포 GGUF(Q8_0)&quot;: &quot;models/gguf/fpga-q8_0.gguf&quot;,
+    &quot;Modelfile&quot;: &quot;models/gguf/Modelfile&quot;,
+}
+STAGES = [                                      # (단계, 장, 상태)
+    (&quot;요구사항·데이터·기준&quot;, &quot;제41~43장&quot;, &quot;완료&quot;),
+    (&quot;학습(0.5B FP32 LoRA, Tiny 비교)&quot;, &quot;제46~48장&quot;, &quot;완료&quot;),
+    (&quot;학습(0.5B QLoRA, GT 1030 경로)&quot;, &quot;제49장&quot;, &quot;CPU 경로 완료, GT 1030 미검증&quot;),
+    (&quot;오답 분석·최종 평가&quot;, &quot;제50장&quot;, &quot;완료(배포 후보 불채택)&quot;),
+    (&quot;저장·병합&quot;, &quot;제51·52장&quot;, &quot;완료&quot;),
+    (&quot;GGUF 변환·양자화&quot;, &quot;제54·55장&quot;, &quot;완료(Q8_0 선정), llama.cpp 실행·속도 미검증&quot;),
+    (&quot;Ollama 배포&quot;, &quot;제56장&quot;, &quot;Modelfile 완료, Ollama 등록·응답·GPU 적재 미검증&quot;),
+    (&quot;API&quot;, &quot;제57장&quot;, &quot;완료(교재 서버), 실제 Ollama 미검증&quot;),
+    (&quot;장치별 실행&quot;, &quot;제58장&quot;, &quot;계산·CPU 실측 완료, GT 1030·Raspberry Pi 미검증&quot;),
+]
 
 
-def weight_mib(n_params: int, fmt: str) -&gt; float:
-    return n_params * BITS[fmt] / 8 / MiB
+def sha(path: Path, n: int = 16) -&gt; str:
+    h = hashlib.sha256()
+    with open(path, &quot;rb&quot;) as f:
+        for block in iter(lambda: f.read(1 &lt;&lt; 20), b&quot;&quot;):
+            h.update(block)
+    return h.hexdigest()[:n]
 
 
-def kv_mib(cfg, tokens: int, bytes_per: int) -&gt; float:
-    return kv_bytes_per_token(cfg, bytes_per) * tokens / MiB
+def versions() -&gt; dict:
+    import datasets
+    import peft
+    import transformers
+    import trl
+    return {&quot;python&quot;: platform.python_version(), &quot;torch&quot;: torch.__version__,
+            &quot;transformers&quot;: transformers.__version__, &quot;peft&quot;: peft.__version__, &quot;trl&quot;: trl.__version__,
+            &quot;datasets&quot;: datasets.__version__}
 
 
-def fits(total_mib: float, device_mib: int) -&gt; bool:
-    return total_mib &lt;= device_mib * (1 - RESERVE)
-
-
-def rss_mib() -&gt; float:
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024        # 리눅스: KiB 단위
+def repeat_training_check() -&gt; tuple:
+    &quot;&quot;&quot;같은 Seed로 Qwen2-Tiny SFT를 두 번 5단계씩 학습해 손실이 똑같은지 본다(제46장 루프)&quot;&quot;&quot;
+    from sft_loop import setup, train_sft
+    runs = []
+    for _ in range(2):
+        _, model, tr, va = setup()
+        runs.append([round(h[&quot;train_loss&quot;], 6) for h in train_sft(model, tr, va, steps=5, log_every=1)])
+    return runs[0], runs[0] == runs[1]
 
 
 def main() -&gt; None:
-    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-    cfg = AutoConfig.from_pretrained(MERGED)
-    n = 494_032_768                                            # 제52장 병합 모델 파라미터 수
-    print(&quot;── 1. KV Cache: 토큰 하나당과 문맥 길이별(Qwen2.5-0.5B) ──&quot;)
-    print(f&quot;  토큰당 FP32 {kv_bytes_per_token(cfg, 4):,}B, FP16 {kv_bytes_per_token(cfg, 2):,}B &quot;
-          f&quot;(2 × {cfg.num_hidden_layers}층 × KV 헤드 {cfg.num_key_value_heads} × 64 × 자료형)&quot;)
-    for t in (512, 2048, 8192, 32768):
-        print(f&quot;  {t:&gt;6}토큰  FP32 {kv_mib(cfg, t, 4):7.1f}MiB  FP16 {kv_mib(cfg, t, 2):7.1f}MiB&quot;)
-
-    print(&quot;\n── 2. 장치별 탑재 판정(가중치 + FP16 KV Cache, 가용의 75% 이내) ──&quot;)
-    print(f&quot;  가중치: &quot; + &quot;, &quot;.join(f&quot;{f} {weight_mib(n, f):.0f}MiB&quot; for f in BITS))
-    table = {}
-    for dev, mem in DEVICES.items():
-        row = {}
-        for fmt in BITS:
-            for t in (2048, 32768):
-                row[f&quot;{fmt}@{t}&quot;] = fits(weight_mib(n, fmt) + kv_mib(cfg, t, 2), mem)
-        table[dev] = row
-        ok = [k for k, v in row.items() if v]
-        print(f&quot;  {dev:&lt;17}가능: {', '.join(ok) if ok else '없음'}&quot;)
-
-    print(&quot;\n── 3. CPU 실측(병합 모델 FP32, Hugging Face, Greedy 64토큰) ──&quot;)
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from sft_loop import SFTDataset, split_rows, validate
     device, _ = select_device()
-    tok = AutoTokenizer.from_pretrained(MERGED)
-    t0 = time.time()
-    model = AutoModelForCausalLM.from_pretrained(MERGED, dtype=torch.float32).to(device).eval()
-    load_s = time.time() - t0
-    rss_loaded = rss_mib()
-    results = []
-    for ctx in (32, 512):
-        ids = torch.randint(1000, 20000, (1, ctx), generator=torch.Generator().manual_seed(0)).to(device)
-        with torch.no_grad():
-            model.generate(ids, max_new_tokens=4, do_sample=False, pad_token_id=tok.pad_token_id)   # 예열
-            t1 = time.time()
-            out = model.generate(ids, max_new_tokens=64, min_new_tokens=64, do_sample=False,
-                                 pad_token_id=tok.pad_token_id, return_dict_in_generate=True)
-            dt = time.time() - t1
-        kv = out.past_key_values
-        kv_real = sum(t.numel() * t.element_size() for layer in kv.layers for t in (layer.keys, layer.values))
-        results.append({&quot;ctx&quot;: ctx, &quot;tok_per_s&quot;: 64 / dt, &quot;kv_mib&quot;: kv_real / MiB,
-                        &quot;kv_formula_mib&quot;: kv_mib(cfg, ctx + 63, 4)})
-        print(f&quot;  문맥 {ctx:&gt;3} + 생성 64: {64 / dt:5.1f}토큰/초, KV Cache 실제 {kv_real / MiB:5.2f}MiB&quot;
-              f&quot; / 계산 {kv_mib(cfg, ctx + 63, 4):5.2f}MiB&quot;)
-    print(f&quot;  로딩 {load_s:.1f}초, 최대 메모리(프로세스) 로딩 후 {rss_loaded:.0f}MiB → 생성 후 {rss_mib():.0f}MiB&quot;)
-    print(f&quot;  측정 조건: {platform.machine()}, 스레드 {torch.get_num_threads()}개, PyTorch {torch.__version__}&quot;)
-    OUT.write_text(json.dumps({&quot;fits&quot;: table, &quot;cpu&quot;: results, &quot;load_s&quot;: load_s, &quot;rss_mib&quot;: rss_mib(),
-                               &quot;threads&quot;: torch.get_num_threads()}, ensure_ascii=False, indent=1) + &quot;\n&quot;,
-                   encoding=&quot;utf-8&quot;)
+    final = json.loads((ROOT / &quot;examples/ch50/final_test.json&quot;).read_text(encoding=&quot;utf-8&quot;))
+    merged_rec = json.loads((ROOT / &quot;examples/ch52/merge.json&quot;).read_text())
+
+    print(&quot;── 1. 입력과 산출물의 지문(SHA-256 앞 16자리) ──&quot;)
+    hashes = {k: sha(ROOT / v) for k, v in {**FILES, **ARTIFACTS}.items()}
+    for k, v in hashes.items():
+        print(f&quot;  {k}: {v}&quot;)
+    manifest = json.loads((ROOT / &quot;examples/ch51/manifest.json&quot;).read_text(encoding=&quot;utf-8&quot;))
+    same = manifest[&quot;adapter_sha256&quot;].startswith(hashes[&quot;배포용 Adapter&quot;])
+    print(f&quot;  배포용 Adapter 해시 = 제51장 대응 기록: {same}&quot;)
+
+    print(&quot;\n── 2. 단계별 상태 ──&quot;)
+    for stage, ch, state in STAGES:
+        print(f&quot;  {stage}({ch}): {state}&quot;)
+
+    print(&quot;\n── 3. 재현 확인 ──&quot;)
+    losses, same_loss = repeat_training_check()
+    print(f&quot;  Seed 0으로 두 번 학습(Tiny 5단계): 손실 {losses} → 두 번 같음 {same_loss}&quot;)
+    tok = AutoTokenizer.from_pretrained(ROOT / &quot;models&quot; / &quot;fpga_merged_v1&quot;)
+    model = AutoModelForCausalLM.from_pretrained(ROOT / &quot;models&quot; / &quot;fpga_merged_v1&quot;,
+                                                 dtype=torch.float32).to(device).eval()
+    ppl = validate(model, SFTDataset(tok, split_rows(&quot;validation&quot;)))[&quot;val_ppl&quot;]
+    print(f&quot;  병합 모델의 도메인 PPL 다시 계산 {ppl:.4f} / 제52장 기록 {merged_rec['final']['ppl_after']:.4f}&quot;
+          f&quot; → 같음 {math.isclose(ppl, merged_rec['final']['ppl_after'], rel_tol=1e-6)}&quot;)
+    from local_api import Client, HFBackend, make_server
+    from chat_template import SYSTEM
+    backend = HFBackend.__new__(HFBackend)                        # 이미 불러온 모델을 그대로 쓴다
+    backend.torch, backend.name, backend.n, backend.tok, backend.model = torch, &quot;fpga-qwen&quot;, 40, tok, model
+    srv = make_server(backend)
+    ans = Client(f&quot;http://127.0.0.1:{srv.server_address[1]}&quot;).generate(&quot;임계 경로란 무엇인가요?&quot;, system=SYSTEM)
+    srv.shutdown()
+    print(f&quot;  API 연결 확인: {ans[:40]}…&quot;)
+
+    print(&quot;\n── 4. 최종 결과(제50장, test 1회) ──&quot;)
+    v = final[&quot;result&quot;]
+    hits = sum(v[&quot;keyword_hit&quot;].values()) / len(v[&quot;keyword_hit&quot;])
+    fmts = sum(v[&quot;format_ok&quot;].values()) / len(v[&quot;format_ok&quot;])
+    print(f&quot;  확정 모델 {final['chosen']}: 핵심어 {hits:.2f}, 형식 {fmts:.2f}, 도메인 PPL {v['domain_ppl']:.2f}, &quot;
+          f&quot;일반 PPL {v['general_ppl']:.2f} → 배포 후보 불채택, 실습 완료&quot;)
+
+    record = {
+        &quot;project&quot;: &quot;FPGA 질의응답 로컬 LLM&quot;, &quot;base_model&quot;: QWEN_ID, &quot;base_revision&quot;: QWEN_REVISION,
+        &quot;hashes&quot;: hashes, &quot;versions&quot;: versions(), &quot;seed&quot;: 0, &quot;device&quot;: device,
+        &quot;training&quot;: {&quot;method&quot;: &quot;LoRA r 8, alpha 16, 모든 Linear&quot;, &quot;lr&quot;: 2e-4, &quot;steps&quot;: 15,
+                     &quot;batch&quot;: &quot;4 × 누적 2&quot;, &quot;max_length&quot;: 256, &quot;loss&quot;: &quot;Completion-only&quot;},
+        &quot;final_test&quot;: {&quot;chosen&quot;: final[&quot;chosen&quot;], &quot;keyword&quot;: hits, &quot;format&quot;: fmts,
+                       &quot;domain_ppl&quot;: v[&quot;domain_ppl&quot;], &quot;general_ppl&quot;: v[&quot;general_ppl&quot;], &quot;adopted&quot;: False},
+        &quot;stages&quot;: [{&quot;stage&quot;: s, &quot;chapters&quot;: c, &quot;state&quot;: t} for s, c, t in STAGES],
+        &quot;reproduced&quot;: {&quot;training_loss_same&quot;: same_loss, &quot;merged_ppl&quot;: ppl},
+    }
+    OUT.write_text(json.dumps(record, ensure_ascii=False, indent=1) + &quot;\n&quot;, encoding=&quot;utf-8&quot;)
+    print(f&quot;\n  기록: {OUT.relative_to(ROOT)}, 라이브러리 {record['versions']}&quot;)
 
 
 if __name__ == &quot;__main__&quot;:
     main()
 </code></pre></div>
 <p>실행:</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch58/ondevice.py
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python examples/ch60/project.py
 </code></pre></div>
-<p>실제 실행 결과(교재 검증 환경, 속도는 실행마다 조금 다름):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 1. KV Cache: 토큰 하나당과 문맥 길이별(Qwen2.5-0.5B) ──
-  토큰당 FP32 24,576B, FP16 12,288B (2 × 24층 × KV 헤드 2 × 64 × 자료형)
-     512토큰  FP32    12.0MiB  FP16     6.0MiB
-    2048토큰  FP32    48.0MiB  FP16    24.0MiB
-    8192토큰  FP32   192.0MiB  FP16    96.0MiB
-   32768토큰  FP32   768.0MiB  FP16   384.0MiB
+<p>실제 실행 결과(교재 검증 환경):</p>
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>── 1. 입력과 산출물의 지문(SHA-256 앞 16자리) ──
+  데이터 원본: 0970ba16f2036082
+  분할: 7ec3428c1f6f3226
+  보강: 8e97003967f1a568
+  평가 기준: 6cb5d55cd7737cca
+  배포용 Adapter: 1850ae6b01ba5522
+  병합 모델: 05583f7fa8327839
+  배포 GGUF(Q8_0): dcb6f266d8346002
+  Modelfile: 2e8423aa99627499
+  배포용 Adapter 해시 = 제51장 대응 기록: True
 
-── 2. 장치별 탑재 판정(가중치 + FP16 KV Cache, 가용의 75% 이내) ──
-  가중치: FP32 1885MiB, FP16 942MiB, Q8_0 501MiB, Q4_0 265MiB
-  GT 1030          가능: FP16@2048, FP16@32768, Q8_0@2048, Q8_0@32768, Q4_0@2048, Q4_0@32768
-  Raspberry Pi 4GB 가능: FP32@2048, FP32@32768, FP16@2048, FP16@32768, Q8_0@2048, Q8_0@32768, Q4_0@2048, Q4_0@32768
-  교재 CPU 8GB       가능: FP32@2048, FP32@32768, FP16@2048, FP16@32768, Q8_0@2048, Q8_0@32768, Q4_0@2048, Q4_0@32768
+── 2. 단계별 상태 ──
+  요구사항·데이터·기준(제41~43장): 완료
+  학습(0.5B FP32 LoRA, Tiny 비교)(제46~48장): 완료
+  학습(0.5B QLoRA, GT 1030 경로)(제49장): CPU 경로 완료, GT 1030 미검증
+  오답 분석·최종 평가(제50장): 완료(배포 후보 불채택)
+  저장·병합(제51·52장): 완료
+  GGUF 변환·양자화(제54·55장): 완료(Q8_0 선정), llama.cpp 실행·속도 미검증
+  Ollama 배포(제56장): Modelfile 완료, Ollama 등록·응답·GPU 적재 미검증
+  API(제57장): 완료(교재 서버), 실제 Ollama 미검증
+  장치별 실행(제58장): 계산·CPU 실측 완료, GT 1030·Raspberry Pi 미검증
 
-── 3. CPU 실측(병합 모델 FP32, Hugging Face, Greedy 64토큰) ──
-  문맥  32 + 생성 64:   9.9토큰/초, KV Cache 실제  2.23MiB / 계산  2.23MiB
-  문맥 512 + 생성 64:   7.1토큰/초, KV Cache 실제 13.48MiB / 계산 13.48MiB
-  로딩 1.7초, 최대 메모리(프로세스) 로딩 후 435MiB → 생성 후 2397MiB
-  측정 조건: x86_64, 스레드 2개, PyTorch 2.15.0+cpu
+── 3. 재현 확인 ──
+  Seed 0으로 두 번 학습(Tiny 5단계): 손실 [8.245526, 8.3344, 8.406805, 8.088895, 8.276464] → 두 번 같음 True
+  병합 모델의 도메인 PPL 다시 계산 12.0587 / 제52장 기록 12.0587 → 같음 True
+  API 연결 확인: 임계 경로는 신호의 최대 값과 최소 값 사이의 범위를 정하는 경로입니다.…
+
+── 4. 최종 결과(제50장, test 1회) ──
+  확정 모델 원본-15: 핵심어 0.08, 형식 1.00, 도메인 PPL 12.06, 일반 PPL 21.37 → 배포 후보 불채택, 실습 완료
+
+  기록: examples/ch60/project.json, 라이브러리 {'python': '3.13.18', 'torch': '2.15.0+cpu', 'transformers': '5.24.0', 'peft': '0.22.0', 'trl': '1.18.2', 'datasets': '5.2.0'}
 </code></pre></div>
 <p><strong>결과 읽기</strong></p>
 <ul>
-<li><strong>1번</strong>에서 토큰 하나의 KV Cache는 FP32로 24,576바이트(24KiB)입니다. 32,768토큰(Qwen2.5의 최대 문맥)이면 FP32 768MiB, FP16 384MiB로, FP16 기준 Q4_0 가중치(265MiB)보다 큽니다. 긴 문맥에서는 KV Cache가 가중치만큼 중요한 예산 항목이 됩니다.</li>
-<li><strong>2번</strong>에서 GT 1030(2GB)은 FP32 가중치(1,885MiB)만으로 75% 한도(1,536MiB)를 넘어 FP32로는 실을 수 없고, FP16·Q8_0·Q4_0는 최대 문맥까지 들어갑니다. 다만 FP16은 위에서 본 이유로 GT 1030에서 쓰지 않습니다. Raspberry Pi 4GB와 교재 CPU는 모든 형식이 들어갑니다.</li>
-<li><strong>3번</strong>에서 실제로 저장된 KV Cache의 크기가 계산과 소수점 둘째 자리까지 같습니다(문맥 + 생성 63토큰분, 마지막 토큰의 KV는 아직 저장 전). 속도는 문맥 32에서 초당 약 10토큰, 문맥 512에서 약 7토큰으로, 문맥이 길수록 느려집니다.</li>
-<li>로딩 직후 프로세스 메모리는 435MiB였다가 생성 후 2,397MiB가 됩니다. 가중치 파일을 메모리에 연결만 해 두었다가 계산하며 실제로 읽기 때문입니다. 로딩 직후의 값만 보고 &quot;모델이 435MiB를 쓴다&quot;고 판단하면 안 됩니다. 2,397MiB는 FP32 가중치 1,885MiB에 연산 버퍼와 라이브러리를 더한 값입니다.</li>
+<li><strong>1번</strong>에서 입력 네 개와 산출물 네 개(Adapter, 병합 모델, Q8_0 GGUF, Modelfile)에 해시를 붙였습니다. 배포용 Adapter의 해시는 제51장 대응 기록과 같아, 그 사이에 파일이 바뀌지 않았음을 확인합니다.</li>
+<li><strong>2번</strong>의 상태표는 이 프로젝트가 어디까지 왔는지 보여 줍니다. 데이터부터 병합·GGUF·Modelfile·API까지는 완료, llama.cpp와 Ollama에서의 실행, GT 1030과 Raspberry Pi 실측은 미검증입니다.</li>
+<li><strong>3번</strong>에서 같은 Seed로 두 번 학습한 손실 다섯 개가 소수점 여섯째 자리까지 같고, 병합 모델의 도메인 PPL을 다시 계산한 값(12.0587)이 제52장 기록과 같습니다. API로 질문하면 답이 오지만, 임계 경로를 &quot;신호의 최대 값과 최소 값 사이의 범위를 정하는 경로&quot;라고 설명하는 등 내용은 틀립니다. 배포 후보로 채택하지 않은 판정과 일치합니다.</li>
+<li><strong>4번</strong>은 제50장의 최종 test 결과를 그대로 옮긴 것입니다. 이 장에서는 test를 다시 재지 않습니다.</li>
 </ul>
-</section><section class="section" id="s06"><h2><span class="num">06</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch58/test_ch58.py</code></p>
-<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제58장 검증 테스트
+</section><section class="section" id="s06"><h2><span class="num">06</span>검증과 완료 기준</h2><p>파일명: <code>examples/ch60/test_ch60.py</code></p>
+<div class="codeblock"><div class="codebar"><span>python</span></div><pre><code># 제60장 검증 테스트
 #
-# 실행: python -m pytest examples/ch58 -q
+# 실행: python -m pytest examples/ch60 -q
 
 import json
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from ondevice import OUT, fits, kv_mib, weight_mib  # noqa: E402
-
-QWEN = SimpleNamespace(hidden_size=896, num_attention_heads=14, num_key_value_heads=2, num_hidden_layers=24)
+from project import FILES, OUT, ROOT, STAGES, sha  # noqa: E402
 
 
-def test_kv_cache_formula():
-    assert kv_mib(QWEN, 1, 4) * 2 ** 20 == 2 * 24 * 2 * 64 * 4
-    assert kv_mib(QWEN, 32768, 2) == 384.0
+def rec():
+    return json.loads(OUT.read_text(encoding=&quot;utf-8&quot;))
 
 
-def test_block_format_sizes():
-    n = 32 * 1000
-    assert weight_mib(n, &quot;Q8_0&quot;) * 2 ** 20 == 1000 * 34 and weight_mib(n, &quot;Q4_0&quot;) * 2 ** 20 == 1000 * 18
+def test_input_hashes_match_repository():
+    r = rec()
+    assert all(r[&quot;hashes&quot;][k] == sha(ROOT / v) for k, v in FILES.items())     # 기록 이후 데이터·기준 변경 없음
 
 
-def test_fit_rule_and_records():
-    assert fits(1536, 2048) and not fits(1537, 2048)
-    r = json.loads(OUT.read_text(encoding=&quot;utf-8&quot;))
-    assert not r[&quot;fits&quot;][&quot;GT 1030&quot;][&quot;FP32@2048&quot;] and r[&quot;fits&quot;][&quot;GT 1030&quot;][&quot;Q4_0@32768&quot;]
-    for c in r[&quot;cpu&quot;]:
-        assert abs(c[&quot;kv_mib&quot;] - c[&quot;kv_formula_mib&quot;]) &lt; 1e-6                  # 실제 KV Cache = 계산
+def test_reproduced_and_recorded():
+    r = rec()
+    assert r[&quot;reproduced&quot;][&quot;training_loss_same&quot;] is True
+    assert abs(r[&quot;reproduced&quot;][&quot;merged_ppl&quot;] - 12.0587) &lt; 1e-3
+    assert r[&quot;seed&quot;] == 0 and r[&quot;base_revision&quot;] and r[&quot;versions&quot;][&quot;trl&quot;]
+
+
+def test_final_and_unverified_items_are_explicit():
+    r = rec()
+    assert r[&quot;final_test&quot;][&quot;adopted&quot;] is False and r[&quot;final_test&quot;][&quot;chosen&quot;] == &quot;원본-15&quot;
+    states = &quot; &quot;.join(s for _, _, s in STAGES)
+    assert &quot;미검증&quot; in states
 </code></pre></div>
 <p>실행:</p>
-<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch58 -q
+<div class="codeblock"><div class="codebar"><span>bash</span></div><pre><code>python -m pytest examples/ch60 -q
 </code></pre></div>
 <p>실제 실행 결과(교재 검증 환경):</p>
-<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>3 passed in 2.28s
+<div class="codeblock"><div class="codebar"><span>text</span></div><pre><code>3 passed in 1.20s
 </code></pre></div>
 <table>
 <thead>
@@ -877,50 +937,39 @@ def test_fit_rule_and_records():
 </thead>
 <tbody>
 <tr>
-  <td>KV Cache 계산</td>
-  <td>토큰당 바이트와 최대 문맥 값이 수식과 같음</td>
+  <td>입력 불변</td>
+  <td>기록한 해시 = 저장소의 현재 데이터·기준 파일</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>형식 크기</td>
-  <td>Q8_0·Q4_0 블록 구조와 같음</td>
+  <td>재현</td>
+  <td>같은 Seed의 학습 손실이 같고, 병합 모델 PPL이 기록과 같음</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>탑재 판정</td>
-  <td>75% 규칙, GT 1030에서 FP32 불가·Q4_0 가능</td>
+  <td>정직한 기록</td>
+  <td>채택 여부와 미검증 단계가 기록에 있음</td>
   <td>통과</td>
 </tr>
 <tr>
-  <td>계산과 실측</td>
-  <td>실제 KV Cache 크기 = 계산</td>
-  <td>통과</td>
-</tr>
-<tr>
-  <td>GT 1030·Raspberry Pi 실측</td>
-  <td>같은 표 형식으로 속도·메모리 측정</td>
-  <td>미검증(장치 없음)</td>
-</tr>
-<tr>
-  <td>GGUF 모델 실행</td>
-  <td>같은 GGUF 모델을 장치별로 실행</td>
-  <td>미검증(제54장 변환 도구 미설치)</td>
+  <td>실행 도구 배포</td>
+  <td>GGUF를 Ollama에 등록해 API로 응답</td>
+  <td>미검증(Ollama 미설치)</td>
 </tr>
 </tbody>
 </table>
-<p>이 장의 측정은 <code>select_device()</code>가 고른 장치(교재 검증 환경은 CPU)에서 Hugging Face 모델로 했습니다. 설계상 장치별 비교는 같은 GGUF 모델로 해야 하지만, 변환 도구를 설치하지 못해 이번 판에서는 계산 판정과 CPU 실측만 담았습니다.</p>
-<p><strong>완료 기준:</strong> 자신의 장치(또는 다른 PC)의 메모리를 DEVICES에 더해 판정을 다시 하고, 스레드 수를 1과 최대로 바꿔 초당 토큰 수가 어떻게 달라지는지 측정 조건과 함께 기록하며, 테스트 3개를 모두 통과하면 이 장을 마친 것입니다.</p>
+<p>이 장의 재현 확인은 <code>select_device()</code>가 고른 장치(교재 검증 환경은 CPU)에서 했습니다. GT 1030에서는 연산 순서가 달라 손실의 소수점 아래 값이 다를 수 있으므로, 같은 장치 안에서 재현을 확인하고 장치 사이에는 허용 오차를 정해 비교합니다.</p>
+<p><strong>완료 기준:</strong> 자신이 고른 주제로 요구사항 표를 쓰고 데이터 20문항 이상과 기준 파일을 먼저 확정한 뒤, 이 장의 순서대로 학습·평가·저장까지 진행해 같은 형식의 프로젝트 기록을 남기며, 다른 사람(또는 새 환경)이 기록만 보고 학습 손실과 평가 값을 재현하는지 확인하고, 테스트 3개를 모두 통과하면 이 장과 교재를 마친 것입니다.</p>
 </section><section class="section" id="s07"><h2><span class="num">07</span>핵심 정리</h2><ul>
-<li>온디바이스 실행은 데이터를 기기 안에 두는 대신 메모리·속도·전력에 맞춰 모델을 줄여야 합니다. 실행 전에 메모리를 계산으로 판정합니다.</li>
-<li>필요한 메모리는 가중치 + KV Cache + 여유입니다. KV Cache는 문맥 길이에 비례하며, 긴 문맥에서는 가중치만큼 커집니다.</li>
-<li>블록 양자화 형식은 Scale 때문에 평균 비트가 조금 큽니다(Q8_0 8.5, Q4_0 4.5).</li>
-<li>메모리에 들어가는 것과 빠른 것은 다릅니다. GT 1030은 FP16 연산이 매우 느립니다.</li>
-<li>속도·메모리는 장치, 스레드, 문맥 길이, 예열, 측정 방법과 함께 기록합니다. 파일을 메모리에 연결만 해 두는 방식은 로딩 직후 메모리를 작게 보이게 합니다.</li>
+<li>프로젝트는 요구사항 문장에서 시작해, 그것을 데이터 설계와 측정 가능한 기준으로 바꾼 뒤에 학습합니다.</li>
+<li>입력과 산출물에는 해시를, 과정에는 Seed·설정·라이브러리 판을 남기고, 다시 실행해 같은 결과가 나오는지 확인합니다.</li>
+<li>최종 성능은 test 1회의 값만 보고하며, 기준 미달이면 배포 후보로 채택하지 않습니다. 실습 완료와 채택은 다른 판정입니다.</li>
+<li>완료·미검증을 단계마다 정직하게 표시합니다. 빠진 단계를 감추지 않는 것이 재현 가능한 기록의 일부입니다.</li>
 </ul>
-<p><strong>다음 장 연결:</strong> 제59장(선택)에서는 LLM 추론의 대부분을 차지하는 행렬곱을 하드웨어로 옮깁니다. 제53장에서 꺼낸 k_proj 가중치를 INT8로 만들어 Basys3 FPGA의 자원에 맞춰 보고, 정수 MAC 연산 블록을 Verilog로 설계합니다.</p>
+<p><strong>교재를 마치며:</strong> 이 교재는 수 표현과 Transformer 구조에서 출발해, 직접 만든 데이터로 실제 모델을 학습하고, 실패를 기록하고, 저장·병합·GGUF·Modelfile·API까지 이었습니다. 이번 판에서 남은 확인은 llama.cpp·Ollama에서의 실제 실행과 GT 1030 실측입니다. 그 결과가 들어오면 해당 장과 이 장의 기록을 새 판으로 올립니다.</p>
 </section><div class="chapter-links" id="chapter-links"></div></main></div>
 <footer class="footer">LLM 파인튜닝 및 로컬 AI 구현 · v01  · 실습 결과는 실제 환경에서 검증</footer>
-<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v03.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v02.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v02.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v02.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v02.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v02.html"}, {"id": "ch41", "number": 41, "title": "SFT와 데이터셋 설계", "file": "ch41_sft_dataset_v02.html"}, {"id": "ch42", "number": 42, "title": "Hugging Face Datasets", "file": "ch42_hf_datasets_v02.html"}, {"id": "ch43", "number": 43, "title": "정제·분리·평가 지표", "file": "ch43_clean_split_v02.html"}, {"id": "ch44", "number": 44, "title": "Chat Template", "file": "ch44_chat_template_v02.html"}, {"id": "ch45", "number": 45, "title": "토큰화와 Label Masking", "file": "ch45_label_mask_v01.html"}, {"id": "ch46", "number": 46, "title": "PyTorch SFT 학습 루프", "file": "ch46_sft_loop_v02.html"}, {"id": "ch47", "number": 47, "title": "TRL SFTTrainer", "file": "ch47_sft_trainer_v04.html"}, {"id": "ch48", "number": 48, "title": "SFTTrainer + LoRA 실전", "file": "ch48_lora_sft_v04.html"}, {"id": "ch49", "number": 49, "title": "SFTTrainer + QLoRA 실전", "file": "ch49_qlora_sft_v02.html"}, {"id": "ch50", "number": 50, "title": "평가·오답 분석·반복 개선", "file": "ch50_improve_v03.html"}, {"id": "ch51", "number": 51, "title": "모델·Adapter 저장과 복원", "file": "ch51_save_load_v01.html"}, {"id": "ch52", "number": 52, "title": "LoRA 병합과 출력 검증", "file": "ch52_merge_v01.html"}, {"id": "ch53", "number": 53, "title": "가중치 추출과 분석", "file": "ch53_export_v01.html"}, {"id": "ch54", "number": 54, "title": "Safetensors → GGUF 변환", "file": "ch54_gguf_v02.html"}, {"id": "ch55", "number": 55, "title": "추론용 양자화와 성능 비교", "file": "ch55_gguf_quant_v01.html"}, {"id": "ch56", "number": 56, "title": "Ollama 사용자 정의 배포", "file": "ch56_ollama_v01.html"}, {"id": "ch57", "number": 57, "title": "로컬 LLM API 서비스", "file": "ch57_local_api_v01.html"}, {"id": "ch58", "number": 58, "title": "온디바이스 AI", "file": "ch58_ondevice_v01.html"}, {"id": "ch59", "number": 59, "title": "Basys3 LLM 연산 블록(선택)", "file": "ch59_fpga_mac_v01.html"}, {"id": "ch60", "number": 60, "title": "도메인 특화 로컬 LLM 종합 프로젝트", "file": "ch60_project_v01.html"}]};</script><script>/*
+<script>window.COURSE={"title": "LLM 파인튜닝 및 로컬 AI 구현", "short_title": "LLM FINE-TUNING", "home_label": "전체 학습 안내서", "chapters": [{"id": "ch01", "number": 1, "title": "LLM 개요와 로컬 개발환경", "file": "ch01_llm_overview_environment_v02.html"}, {"id": "ch02", "number": 2, "title": "CPU·GPU 연산과 메모리 구조", "file": "ch02_cpu_gpu_memory_v01.html"}, {"id": "ch03", "number": 3, "title": "Tensor 구조와 차원", "file": "ch03_tensor_shape_v01.html"}, {"id": "ch04", "number": 4, "title": "행렬 연산과 내적", "file": "ch04_matrix_dot_v03.html"}, {"id": "ch05", "number": 5, "title": "가중치와 Linear Layer", "file": "ch05_linear_layer_v01.html"}, {"id": "ch06", "number": 6, "title": "활성화 함수와 Softmax", "file": "ch06_activation_softmax_v01.html"}, {"id": "ch07", "number": 7, "title": "자기회귀 언어 모델의 원리", "file": "ch07_autoregressive_lm_v02.html"}, {"id": "ch08", "number": 8, "title": "Tokenizer와 Vocabulary", "file": "ch08_tokenizer_vocab_v02.html"}, {"id": "ch09", "number": 9, "title": "BPE 토크나이저 직접 구현", "file": "ch09_bpe_tokenizer_v02.html"}, {"id": "ch10", "number": 10, "title": "Embedding과 벡터 표현", "file": "ch10_embedding_v02.html"}, {"id": "ch11", "number": 11, "title": "Transformer 전체 구조", "file": "ch11_transformer_architecture_v02.html"}, {"id": "ch12", "number": 12, "title": "Query·Key·Value 생성", "file": "ch12_qkv_projection_v01.html"}, {"id": "ch13", "number": 13, "title": "Scaled Dot-Product Attention", "file": "ch13_scaled_dot_product_attention_v01.html"}, {"id": "ch14", "number": 14, "title": "Causal Mask와 Self-Attention", "file": "ch14_causal_mask_v01.html"}, {"id": "ch15", "number": 15, "title": "Multi-Head Attention과 GQA", "file": "ch15_mha_gqa_v01.html"}, {"id": "ch16", "number": 16, "title": "위치 정보와 RoPE", "file": "ch16_rope_v01.html"}, {"id": "ch17", "number": 17, "title": "FFN과 SwiGLU", "file": "ch17_ffn_swiglu_v01.html"}, {"id": "ch18", "number": 18, "title": "정규화와 Residual Connection", "file": "ch18_rmsnorm_residual_v02.html"}, {"id": "ch19", "number": 19, "title": "Qwen2-Tiny 조립과 순전파 검증", "file": "ch19_qwen2_tiny_v01.html"}, {"id": "ch20", "number": 20, "title": "실제 Qwen 모델 구조와 추론 분석", "file": "ch20_qwen_analysis_v02.html"}, {"id": "ch21", "number": 21, "title": "사전학습·전이학습·파인튜닝", "file": "ch21_transfer_learning_v02.html"}, {"id": "ch22", "number": 22, "title": "손실함수와 Perplexity", "file": "ch22_loss_perplexity_v01.html"}, {"id": "ch23", "number": 23, "title": "역전파와 Gradient", "file": "ch23_backprop_gradient_v01.html"}, {"id": "ch24", "number": 24, "title": "Optimizer와 학습 반복", "file": "ch24_optimizer_v01.html"}, {"id": "ch25", "number": 25, "title": "Qwen2-Tiny 사전학습과 Full Fine-tuning", "file": "ch25_pretrain_full_ft_v03.html"}, {"id": "ch26", "number": 26, "title": "가중치 동결과 PEFT", "file": "ch26_freeze_peft_v01.html"}, {"id": "ch27", "number": 27, "title": "Rank와 저랭크 분해", "file": "ch27_rank_svd_v01.html"}, {"id": "ch28", "number": 28, "title": "LoRA의 수학적 원리", "file": "ch28_lora_math_v02.html"}, {"id": "ch29", "number": 29, "title": "PyTorch LoRA 직접 구현", "file": "ch29_lora_scratch_v02.html"}, {"id": "ch30", "number": 30, "title": "PEFT 라이브러리 LoRA", "file": "ch30_peft_lora_v01.html"}, {"id": "ch31", "number": 31, "title": "컴퓨터의 수 표현", "file": "ch31_number_format_v01.html"}, {"id": "ch32", "number": 32, "title": "FP32·FP16·BF16", "file": "ch32_float_formats_v01.html"}, {"id": "ch33", "number": 33, "title": "INT8 양자화 직접 구현", "file": "ch33_int8_quant_v01.html"}, {"id": "ch34", "number": 34, "title": "INT4와 Bit Packing", "file": "ch34_int4_packing_v01.html"}, {"id": "ch35", "number": 35, "title": "역양자화와 오차 분석", "file": "ch35_quant_error_v01.html"}, {"id": "ch36", "number": 36, "title": "NF4와 블록 단위 양자화", "file": "ch36_nf4_v02.html"}, {"id": "ch37", "number": 37, "title": "bitsandbytes와 GPU 호환성", "file": "ch37_bitsandbytes_v02.html"}, {"id": "ch38", "number": 38, "title": "QLoRA 구조와 메모리 최적화", "file": "ch38_qlora_memory_v02.html"}, {"id": "ch39", "number": 39, "title": "QLoRA 최소 학습", "file": "ch39_qlora_train_v02.html"}, {"id": "ch40", "number": 40, "title": "Full FT·LoRA·QLoRA 비교", "file": "ch40_method_compare_v02.html"}, {"id": "ch41", "number": 41, "title": "SFT와 데이터셋 설계", "file": "ch41_sft_dataset_v02.html"}, {"id": "ch42", "number": 42, "title": "Hugging Face Datasets", "file": "ch42_hf_datasets_v02.html"}, {"id": "ch43", "number": 43, "title": "정제·분리·평가 지표", "file": "ch43_clean_split_v02.html"}, {"id": "ch44", "number": 44, "title": "Chat Template", "file": "ch44_chat_template_v02.html"}, {"id": "ch45", "number": 45, "title": "토큰화와 Label Masking", "file": "ch45_label_mask_v01.html"}, {"id": "ch46", "number": 46, "title": "PyTorch SFT 학습 루프", "file": "ch46_sft_loop_v02.html"}, {"id": "ch47", "number": 47, "title": "TRL SFTTrainer", "file": "ch47_sft_trainer_v05.html"}, {"id": "ch48", "number": 48, "title": "SFTTrainer + LoRA 실전", "file": "ch48_lora_sft_v04.html"}, {"id": "ch49", "number": 49, "title": "SFTTrainer + QLoRA 실전", "file": "ch49_qlora_sft_v02.html"}, {"id": "ch50", "number": 50, "title": "평가·오답 분석·반복 개선", "file": "ch50_improve_v03.html"}, {"id": "ch51", "number": 51, "title": "모델·Adapter 저장과 복원", "file": "ch51_save_load_v01.html"}, {"id": "ch52", "number": 52, "title": "LoRA 병합과 출력 검증", "file": "ch52_merge_v01.html"}, {"id": "ch53", "number": 53, "title": "가중치 추출과 분석", "file": "ch53_export_v01.html"}, {"id": "ch54", "number": 54, "title": "Safetensors → GGUF 변환", "file": "ch54_gguf_v02.html"}, {"id": "ch55", "number": 55, "title": "추론용 양자화와 성능 비교", "file": "ch55_gguf_quant_v01.html"}, {"id": "ch56", "number": 56, "title": "Ollama 사용자 정의 배포", "file": "ch56_ollama_v01.html"}, {"id": "ch57", "number": 57, "title": "로컬 LLM API 서비스", "file": "ch57_local_api_v01.html"}, {"id": "ch58", "number": 58, "title": "온디바이스 AI", "file": "ch58_ondevice_v02.html"}, {"id": "ch59", "number": 59, "title": "Basys3 LLM 연산 블록(선택)", "file": "ch59_fpga_mac_v01.html"}, {"id": "ch60", "number": 60, "title": "도메인 특화 로컬 LLM 종합 프로젝트", "file": "ch60_project_v02.html"}]};</script><script>/*
  * 교육용 HTML 공통 동작 — 유지보수용 원본 (STANDARD 4·10.3·10.4)
  * 페이지 본문은 바꾸지 않고 탐색·이전/다음·모바일 메뉴·코드 복사만 덧붙인다.
  * 입력: 페이지의 window.COURSE (tools/guide/build_guides.py가 실제 존재하는 장만 넣음),
