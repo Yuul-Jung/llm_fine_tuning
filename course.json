@@ -772,6 +772,23 @@
         "API 변화",
         "기준값"
       ]
+    },
+    {
+      "id": "ch48",
+      "number": 48,
+      "title": "SFTTrainer + LoRA 실전",
+      "subtitle": "부품 결합 → Target Modules 선정 → 도메인 학습 → 응답 비교",
+      "slug": "ch48_lora_sft",
+      "version": "v01",
+      "source": "content/ch48.md",
+      "tags": [
+        "LoRA",
+        "SFTTrainer",
+        "Target Modules",
+        "도메인 학습",
+        "과적합",
+        "응답 비교"
+      ]
     }
   ]
 }
