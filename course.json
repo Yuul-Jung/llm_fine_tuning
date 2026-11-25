@@ -755,6 +755,23 @@
         "Checkpoint",
         "재개"
       ]
+    },
+    {
+      "id": "ch47",
+      "number": 47,
+      "title": "TRL SFTTrainer",
+      "subtitle": "SFTConfig 대응표 → 자료형 설정 → 버전별 API 변화 → 기준 모델 평가",
+      "slug": "ch47_sft_trainer",
+      "version": "v01",
+      "source": "content/ch47.md",
+      "tags": [
+        "TRL",
+        "SFTTrainer",
+        "SFTConfig",
+        "FP32",
+        "API 변화",
+        "기준값"
+      ]
     }
   ]
 }
