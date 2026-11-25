@@ -50,6 +50,7 @@ def test_criteria_file_and_scorers():
     c = load_criteria()
     split = json.loads((ROOT / c["data"]["split"]).read_text(encoding="utf-8"))["split"]
     assert sorted(c["keywords"]) == sorted(i for i, s in split.items() if s == "test")
+    assert sorted(c["dev_keywords"]) == sorted(i for i, s in split.items() if s == "validation")
     assert keyword_hit("상태 레지스터와 다음 상태 논리", ["상태 레지스터", "다음 상태", "default"]) == 2 / 3
     assert format_ok("임계 경로는 가장 긴 경로입니다.", 4)
     assert not format_ok("가장 긴 경로입니다!", 4)

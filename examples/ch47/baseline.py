@@ -36,17 +36,22 @@ def answer(tok, model, r: dict) -> str:
     return tok.decode(out[0, ids.shape[1]:], skip_special_tokens=True).strip()
 
 
-def measure(tok, model) -> dict:
-    """제43장 기준 파일의 네 지표를 잰다(학습 전후에 같은 함수를 쓴다)"""
+def measure(tok, model, split: str = "validation") -> dict:
+    """제43장 기준 파일의 네 지표를 잰다(학습 전후에 같은 함수를 쓴다).
+
+    핵심어·형식은 split의 문항으로 생성해 잰다. 학습 중 판정은 validation, test는 마지막에 한 번만.
+    """
     c = load_criteria()
+    keywords = c["dev_keywords"] if split == "validation" else c["keywords"]
     va = SFTDataset(tok, split_rows("validation"))
     general = math.exp(eval_loss(model, load_blocks(tok, "eval"), "cpu"))
     max_s = c["metrics"]["format_ok"]["max_sentences"]
-    answers = {r["id"]: answer(tok, model, r) for r in split_rows("test")}
+    answers = {r["id"]: answer(tok, model, r) for r in split_rows(split)}
     return {
         "domain_ppl": validate(model, va)["val_ppl"],
         "general_ppl": general,
-        "keyword_hit": {i: keyword_hit(a, c["keywords"][i]) for i, a in answers.items()},
+        "split": split,
+        "keyword_hit": {i: keyword_hit(a, keywords[i]) for i, a in answers.items()},
         "format_ok": {i: format_ok(a, max_s) for i, a in answers.items()},
         "answers": answers,
         "generation": GEN,
@@ -62,9 +67,9 @@ def main() -> None:
     print("── Qwen2.5-0.5B-Instruct 기준값(학습 전) ──")
     print(f"  도메인 PPL(validation 답 부분)  {m['domain_ppl']:.2f}")
     print(f"  일반 PPL(고정 eval)            {m['general_ppl']:.2f}")
-    print(f"  핵심어 적중률(test 평균)        {sum(hits) / len(hits):.2f}")
-    print(f"  형식 준수율(test)               {sum(fmts) / len(fmts):.2f}")
-    print("\n── test 답(앞부분) ──")
+    print(f"  핵심어 적중률(validation 평균)  {sum(hits) / len(hits):.2f}")
+    print(f"  형식 준수율(validation)         {sum(fmts) / len(fmts):.2f}")
+    print("\n── validation 답(앞부분) ──")
     for i, a in m["answers"].items():
         print(f"  {i}  핵심어 {m['keyword_hit'][i]:.2f}  형식 {m['format_ok'][i]!s:<5}  {a[:44].replace(chr(10), ' ')}…")
     c = load_criteria()["metrics"]

@@ -1,7 +1,7 @@
 # 제43장: 실험 전에 미리 적어 두는 평가 지표와 합격 기준
 # 이 파일은 제44장 이후의 학습을 시작하기 전에 확정하며, 결과를 본 뒤 고치지 않는다.
 # 고쳐야 한다면 version을 올리고 고친 이유를 changes에 남긴다.
-version: 1
+version: 2
 data:
   source: datasets/fpga_qa/fpga_qa.json
   split: datasets/fpga_qa/split_v1.json
@@ -34,4 +34,15 @@ keywords:          # test 문항의 핵심어(사람이 정답을 보고 고름)
   fpga-040: [LUT, 플립플롭, 블록 RAM, DSP]
   fpga-044: [알 수 없, 리셋, 구동]
 
-changes: []
+dev_keywords:      # validation 문항의 핵심어(version 2에서 추가). 학습 중 판정은 이것으로 한다
+  fpga-005: [곱셈, 누적, 전용, 필터]
+  fpga-019: [반복, parameter, 인스턴스]
+  fpga-024: [1억, 27비트, 반전]
+  fpga-033: [셋업, 홀드, 중간 상태, 동기화기]
+  fpga-041: [내부 신호, 캡처, 보드]
+  fpga-049: [래치, else, 플립플롭]
+
+changes:
+  - version: 2
+    what: validation 문항의 핵심어(dev_keywords)를 추가하고, 핵심어·형식 지표를 학습 중에는 validation으로 잰다
+    why: 제47~49장에서 핵심어·형식을 test로 재고 있었다. 결과를 보며 다음 실험을 정하면 test가 설정 선택에 쓰여 마지막 평가가 낙관적이 된다. 합격선과 test 핵심어는 바꾸지 않는다
