@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from gguf import GGMLQuantizationType, GGUFWriter, LlamaFileType, TokenType
+from gguf import GGMLQuantizationType, GGUFWriter, LlamaFileType, TokenType, quants
 from safetensors.torch import load_file
 
 NAME_MAP = {                                                 # Hugging Face 이름 → GGUF 이름
@@ -26,7 +26,8 @@ LAYER_MAP = {
     "mlp.gate_proj.weight": "ffn_gate.weight", "mlp.up_proj.weight": "ffn_up.weight",
     "mlp.down_proj.weight": "ffn_down.weight",
 }
-FILE_TYPES = {"F32": (LlamaFileType.ALL_F32, np.float32), "F16": (LlamaFileType.MOSTLY_F16, np.float16)}
+FILE_TYPES = {"F32": (LlamaFileType.ALL_F32, np.float32), "F16": (LlamaFileType.MOSTLY_F16, np.float16),
+              "Q8_0": (LlamaFileType.MOSTLY_Q8_0, None), "Q4_0": (LlamaFileType.MOSTLY_Q4_0, None)}   # 제55장
 
 
 def gguf_name(hf: str) -> str:
@@ -84,6 +85,11 @@ def convert(model_dir: Path, out: Path, ftype: str = "F32") -> dict:
     counts = {"F32": 0, ftype: 0}
     for hf, t in state.items():
         a = t.to(torch.float32).numpy()
+        if a.ndim == 2 and ftype.startswith("Q"):            # 제55장: 32개 블록 양자화(gguf 라이브러리 구현)
+            q = GGMLQuantizationType[ftype]
+            w.add_tensor(gguf_name(hf), quants.quantize(a, q), raw_dtype=q)
+            counts[ftype] += 1
+            continue
         if a.ndim == 2 and ftype != "F32":                   # 행렬만 낮은 정밀도, 1차원(편향·정규화)은 F32
             a = a.astype(np_dtype)
             counts[ftype] += 1
