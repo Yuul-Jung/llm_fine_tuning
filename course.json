@@ -891,6 +891,23 @@
         "Timeout",
         "접근 제어"
       ]
+    },
+    {
+      "id": "ch58",
+      "number": 58,
+      "title": "온디바이스 AI",
+      "subtitle": "클라우드·로컬·엣지 → 메모리 제약과 KV Cache → 장치별 실행 → 측정과 선정 기준",
+      "slug": "ch58_ondevice",
+      "version": "v01",
+      "source": "content/ch58.md",
+      "tags": [
+        "온디바이스",
+        "KV Cache",
+        "메모리 예산",
+        "Q8_0",
+        "Q4_0",
+        "측정 조건"
+      ]
     }
   ]
 }
