@@ -908,6 +908,23 @@
         "Q4_0",
         "측정 조건"
       ]
+    },
+    {
+      "id": "ch59",
+      "number": 59,
+      "title": "Basys3 LLM 연산 블록(선택)",
+      "subtitle": "LLM 연산과 NPU → Basys3 자원과 탑재 범위 → 정수 MAC와 누산기 → RTL MatMul과 Testbench",
+      "slug": "ch59_fpga_mac",
+      "version": "v01",
+      "source": "content/ch59.md",
+      "tags": [
+        "FPGA",
+        "Basys3",
+        "MAC",
+        "INT8",
+        "Verilog",
+        "Testbench"
+      ]
     }
   ]
 }
