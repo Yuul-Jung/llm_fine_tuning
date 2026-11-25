@@ -671,6 +671,23 @@
         "라이선스",
         "FPGA 데이터셋"
       ]
+    },
+    {
+      "id": "ch42",
+      "number": 42,
+      "title": "Hugging Face Datasets",
+      "subtitle": "CSV, JSON, JSONL → Dataset과 DatasetDict → map, filter, select → 저장과 복원",
+      "slug": "ch42_hf_datasets",
+      "version": "v01",
+      "source": "content/ch42.md",
+      "tags": [
+        "Datasets",
+        "JSONL",
+        "DatasetDict",
+        "map",
+        "filter",
+        "save_to_disk"
+      ]
     }
   ]
 }

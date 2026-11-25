@@ -11,3 +11,5 @@ safetensors==0.8.0
 transformers==5.24.0
 peft==0.22.0              # 제30장부터
 bitsandbytes==0.50.2      # 제36장부터(CPU 경로 지원)
+datasets==5.2.0           # 제42장부터
+trl==1.18.2               # 제47장부터
