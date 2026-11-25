@@ -721,6 +721,23 @@
         "Generation Prompt",
         "System 문구"
       ]
+    },
+    {
+      "id": "ch45",
+      "number": 45,
+      "title": "토큰화와 Label Masking",
+      "subtitle": "세 입력 배열 → Completion-only Loss → 끝 표시와 PAD → 길이 제한과 잘림",
+      "slug": "ch45_label_mask",
+      "version": "v01",
+      "source": "content/ch45.md",
+      "tags": [
+        "Label Masking",
+        "attention_mask",
+        "Completion-only",
+        "PAD",
+        "EOS",
+        "잘림"
+      ]
     }
   ]
 }
