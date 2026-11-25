@@ -20,6 +20,7 @@ import torch  # noqa: E402
 from torch.utils.data import DataLoader, Dataset, RandomSampler  # noqa: E402
 
 from check_dataset import load  # noqa: E402                 (제41장)
+from common.device import select_device  # noqa: E402
 from label_mask import IGNORE, build_example, pad_batch  # noqa: E402   (제45장)
 from optim_memory import warmup_cosine  # noqa: E402          (제24장)
 
@@ -69,7 +70,8 @@ def validate(model, ds) -> dict:
     model.eval()
     total, n = 0.0, 0
     for e in ds.items:
-        ids, lab = torch.tensor([e["input_ids"]]), torch.tensor([e["labels"]])
+        dev = next(model.parameters()).device
+        ids, lab = torch.tensor([e["input_ids"]], device=dev), torch.tensor([e["labels"]], device=dev)
         k = int((lab[0, 1:] != IGNORE).sum())
         total += model(input_ids=ids, labels=lab).loss.item() * k
         n += k
@@ -115,7 +117,7 @@ def train_sft(model, train_ds, val_ds, *, steps: int, batch: int = 4, accum: int
                 batches = iter(loader(train_ds, batch, seed, epoch))
                 for _ in range(pos):                              # 재개: 이번 에폭에서 쓴 묶음 건너뛰기
                     next(batches)
-            b = next(batches)
+            b = {k: v.to(next(model.parameters()).device) for k, v in next(batches).items()}
             consumed += 1
             out = model(input_ids=b["input_ids"], attention_mask=b["attention_mask"], labels=b["labels"])
             (out.loss / accum).backward()
@@ -146,7 +148,8 @@ def setup(model_dir: Path = TINY):
     from transformers import AutoModelForCausalLM, AutoTokenizer
     tok = AutoTokenizer.from_pretrained(TINY)
     torch.manual_seed(0)
-    model = AutoModelForCausalLM.from_pretrained(model_dir, dtype=torch.float32)
+    device, _ = select_device(verbose=False)                 # Qwen2-Tiny는 GT 1030에도 들어간다
+    model = AutoModelForCausalLM.from_pretrained(model_dir, dtype=torch.float32).to(device)
     tr, va = SFTDataset(tok, split_rows("train")), SFTDataset(tok, split_rows("validation"))
     tr.pad_id = va.pad_id = tok.pad_token_id
     return tok, model, tr, va

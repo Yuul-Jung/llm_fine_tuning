@@ -21,7 +21,7 @@ from transformers.utils import logging  # noqa: E402
 
 from baseline import measure  # noqa: E402                         (제47장)
 from sft_loop import SFTDataset, setup, split_rows, validate  # noqa: E402   (제46장)
-from sft_trainer import SAME_AS_CH46, TMP, to_hf_dataset  # noqa: E402  (제47장)
+from sft_trainer import SAME_AS_CH46, TMP, to_hf_dataset, train_device  # noqa: E402  (제47장)
 
 logging.disable_progress_bar()
 logging.set_verbosity_error()
@@ -38,12 +38,12 @@ def lora_config(targets: list, r: int = 8) -> LoraConfig:
                       bias="none", task_type="CAUSAL_LM")
 
 
-def train_lora(model, tok, tr, va, targets: list, **overrides):
+def train_lora(model, tok, tr, va, targets: list, device: str = "cpu", **overrides):
     """SFTTrainer가 peft_config를 받아 LoRA를 붙이고 학습한다. 학습된 PEFT 모델과 기록을 돌려준다."""
     from trl import SFTConfig, SFTTrainer
     torch.manual_seed(0)                                           # LoRA A 초기값 고정
     cfg = {**SAME_AS_CH46, "disable_tqdm": True, **overrides}
-    trainer = SFTTrainer(model=model, args=SFTConfig(output_dir=str(TMP / "ch48_run"), use_cpu=True, **cfg),
+    trainer = SFTTrainer(model=model, args=SFTConfig(output_dir=str(TMP / "ch48_run"), use_cpu=device == "cpu", **cfg),
                          processing_class=tok, peft_config=lora_config(targets),
                          train_dataset=to_hf_dataset(tr), eval_dataset=to_hf_dataset(va))
     trainer.train()
@@ -63,7 +63,7 @@ def run_scope() -> None:
         tok, model, tr, va = setup()
         before = validate(model, va)["val_loss"]
         t0 = time.time()
-        m, n, hist = train_lora(model, tok, tr, va, targets, learning_rate=2e-3)
+        m, n, hist = train_lora(model, tok, tr, va, targets, device=train_device(1024), learning_rate=2e-3)
         results[name] = {"targets": targets, "trainable": n, "val_before": before,
                          "val_after": validate(m, va)["val_loss"], "curve": curve(hist),
                          "seconds": round(time.time() - t0)}
@@ -82,7 +82,8 @@ def run_domain() -> None:
     tr, va = SFTDataset(tok, split_rows("train")), SFTDataset(tok, split_rows("validation"))
     print("── Qwen2.5-0.5B FP32 LoRA(모든 Linear, r 8, lr 2e-4, 30단계) ──")
     t0 = time.time()
-    m, n, hist = train_lora(model, tok, tr, va, SCOPES["모든 Linear"], learning_rate=2e-4)
+    device = train_device(6144)                     # FP32 0.5B 학습: GT 1030(2GB)이면 CPU
+    m, n, hist = train_lora(model, tok, tr, va, SCOPES["모든 Linear"], device=device, learning_rate=2e-4)
     secs = round(time.time() - t0)
     print(f"  학습 파라미터 {n:,}개, 학습 {secs}초")
     print("  단계   train   val(샘플 평균)")

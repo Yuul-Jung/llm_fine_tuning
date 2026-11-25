@@ -24,7 +24,7 @@ from clean_split import NGRAM_T, jaccard, ngrams  # noqa: E402  (제43장)
 from criteria import judge, load_criteria  # noqa: E402        (제43장)
 from lora_sft import SCOPES, lora_config  # noqa: E402         (제48장)
 from sft_loop import SFTDataset, split_rows  # noqa: E402      (제46장)
-from sft_trainer import SAME_AS_CH46, to_hf_dataset  # noqa: E402   (제47장)
+from sft_trainer import SAME_AS_CH46, to_hf_dataset, train_device  # noqa: E402   (제47장)
 
 logging.disable_progress_bar()
 logging.set_verbosity_error()
@@ -75,8 +75,8 @@ def train_run(name: str, rows: list, tok) -> tuple:
     model = load_model()
     tr, va = SFTDataset(tok, rows), SFTDataset(tok, split_rows("validation"))
     cfg = {**SAME_AS_CH46, "learning_rate": 2e-4, "save_strategy": "steps", "save_steps": 15,
-           "disable_tqdm": True}
-    trainer = SFTTrainer(model=model, args=SFTConfig(output_dir=str(MODELS / name), use_cpu=True, **cfg),
+           "disable_tqdm": True, "use_cpu": train_device(6144) == "cpu"}   # FP32 0.5B: GT 1030이면 CPU
+    trainer = SFTTrainer(model=model, args=SFTConfig(output_dir=str(MODELS / name), **cfg),
                          processing_class=tok, peft_config=lora_config(SCOPES["모든 Linear"]),
                          train_dataset=to_hf_dataset(tr), eval_dataset=to_hf_dataset(va))
     trainer.train()

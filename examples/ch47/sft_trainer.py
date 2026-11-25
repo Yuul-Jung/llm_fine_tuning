@@ -13,6 +13,7 @@ sys.path.insert(0, str(HERE.parent / "ch46"))
 import torch  # noqa: E402
 
 from sft_loop import IGNORE, LOG, setup, validate  # noqa: E402      (제46장)
+from common.device import select_device  # noqa: E402          (sft_loop가 examples/를 경로에 넣는다)
 
 OUT = HERE / "trainer_log.json"
 TMP = Path(tempfile.gettempdir())          # Trainer 작업 폴더(운영체제의 임시 폴더, Windows도 동작)
@@ -42,6 +43,14 @@ SAME_AS_CH46 = {
     "save_strategy": "no",
     "report_to": "none",
 }
+
+
+def train_device(need_mib: int) -> str:
+    """select_device()가 GPU를 골라도, 학습에 필요한 메모리보다 VRAM이 작으면 CPU로 학습한다"""
+    device, _ = select_device(verbose=False)
+    if device == "cuda" and torch.cuda.get_device_properties(0).total_memory / 2 ** 20 < need_mib:
+        return "cpu"
+    return device
 
 
 def to_hf_dataset(ds):
@@ -79,7 +88,7 @@ def removed_names() -> list:
 
 def run_trainer(model, tok, tr, va, out_dir: str = str(TMP / "ch47_run")) -> list:
     from trl import SFTConfig, SFTTrainer
-    args = SFTConfig(output_dir=out_dir, use_cpu=True, **SAME_AS_CH46)
+    args = SFTConfig(output_dir=out_dir, use_cpu=train_device(1024) == "cpu", **SAME_AS_CH46)
     trainer = SFTTrainer(model=model, args=args, processing_class=tok,
                          train_dataset=to_hf_dataset(tr), eval_dataset=to_hf_dataset(va))
     trainer.train()

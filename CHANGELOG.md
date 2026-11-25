@@ -1,5 +1,20 @@
 # 변경 이력
 
+## 2026-11-25 (제6부)
+
+### 추가
+- 제6부 제51~53장, 제57~60장 원고·실습 코드·검증 테스트(전체 테스트 319개)
+- 배포용 Adapter(원본 Revision 기록)와 대응 기록 `examples/ch51/manifest.json`, 병합 모델 생성(`examples/ch52/merge.py`)
+- Ollama 형식의 로컬 API 서버·클라이언트(`examples/ch57/local_api.py`), 장치별 메모리 판정(`examples/ch58`)
+- 제59장(선택) INT8 MAC RTL과 Testbench(`examples/ch59/rtl/`), 사이클 단위 파이썬 모델
+- 프로젝트 기록 `examples/ch60/project.json`
+
+### 미작성
+- 제54~56장(GGUF 변환, 추론용 양자화, Ollama 배포): 변환 도구 설치 허가 대기
+
+### 변경(제6부 적대적 검증 반영, `design/검증보고서_제6부.md`)
+- 제46장 v02, 제47·48장 v04, 제50장 v03: 실습 장치를 `select_device()`로 결정(제47장 `train_device()`: VRAM이 부족하면 CPU)
+
 ## 2026-11-25 (제5부)
 
 ### 추가

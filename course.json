@@ -745,7 +745,7 @@
       "title": "PyTorch SFT 학습 루프",
       "subtitle": "데이터를 묶는 세 부품 → 학습 단계 → Validation → 로그와 Checkpoint",
       "slug": "ch46_sft_loop",
-      "version": "v01",
+      "version": "v02",
       "source": "content/ch46.md",
       "tags": [
         "SFT",
@@ -762,7 +762,7 @@
       "title": "TRL SFTTrainer",
       "subtitle": "SFTConfig 대응표 → 자료형 설정 → 버전별 API 변화 → 기준 모델 평가",
       "slug": "ch47_sft_trainer",
-      "version": "v03",
+      "version": "v04",
       "source": "content/ch47.md",
       "tags": [
         "TRL",
@@ -779,7 +779,7 @@
       "title": "SFTTrainer + LoRA 실전",
       "subtitle": "부품 결합 → Target Modules 선정 → 도메인 학습 → 응답 비교",
       "slug": "ch48_lora_sft",
-      "version": "v03",
+      "version": "v04",
       "source": "content/ch48.md",
       "tags": [
         "LoRA",
@@ -813,7 +813,7 @@
       "title": "평가·오답 분석·반복 개선",
       "subtitle": "기준값 비교 → 과적합 판정 → 하이퍼파라미터 조정 → 환각과 망각 → 오답 분석과 재학습 → 최종 Test",
       "slug": "ch50_improve",
-      "version": "v02",
+      "version": "v03",
       "source": "content/ch50.md",
       "tags": [
         "오답 분석",
