@@ -688,6 +688,23 @@
         "filter",
         "save_to_disk"
       ]
+    },
+    {
+      "id": "ch43",
+      "number": 43,
+      "title": "정제·분리·평가 지표",
+      "subtitle": "중복·유사 검출 → 그룹 분할과 누출 검사 → 평가 지표 → 합격 기준 사전 기록",
+      "slug": "ch43_clean_split",
+      "version": "v01",
+      "source": "content/ch43.md",
+      "tags": [
+        "데이터 정제",
+        "중복 제거",
+        "N-gram",
+        "문장 임베딩",
+        "데이터 누출",
+        "평가 지표"
+      ]
     }
   ]
 }
