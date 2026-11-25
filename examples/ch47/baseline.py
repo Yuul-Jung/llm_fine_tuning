@@ -30,7 +30,7 @@ GEN = {"max_new_tokens": 160, "do_sample": False}
 
 def answer(tok, model, r: dict) -> str:
     text = render(tok, chat(r)[:2], gen=True)
-    ids = tok(text, return_tensors="pt", add_special_tokens=False).input_ids
+    ids = tok(text, return_tensors="pt", add_special_tokens=False).input_ids.to(model.device)
     with torch.no_grad():
         out = model.generate(ids, **GEN, pad_token_id=tok.pad_token_id)
     return tok.decode(out[0, ids.shape[1]:], skip_special_tokens=True).strip()
@@ -44,7 +44,7 @@ def measure(tok, model, split: str = "validation") -> dict:
     c = load_criteria()
     keywords = c["dev_keywords"] if split == "validation" else c["keywords"]
     va = SFTDataset(tok, split_rows("validation"))
-    general = math.exp(eval_loss(model, load_blocks(tok, "eval"), "cpu"))
+    general = math.exp(eval_loss(model, load_blocks(tok, "eval"), str(model.device)))   # 모델이 있는 장치에서
     max_s = c["metrics"]["format_ok"]["max_sentences"]
     answers = {r["id"]: answer(tok, model, r) for r in split_rows(split)}
     return {

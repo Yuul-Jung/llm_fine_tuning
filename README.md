@@ -72,3 +72,8 @@ bash publish.sh        # content/*.md → dist/ → docs/
 
 공통 책장 이미지, 컴팩트한 상단 배너, 좌측 전체 장/절 탐색, 모바일 메뉴, 파일 버전 및 검증 기준을 따릅니다.
 적용한 rule_md 기준 커밋: `028248a19afc66e9aafdab393fbe0de10a3930ca`
+
+## 실습 장비 기준
+
+- 기본 경로는 CPU이며, GPU 최소 기준은 GT 1030 2GB입니다(학생 장비 미정, 가장 작은 경우를 가정).
+- 저자는 RTX 3080 Ti에서 GPU 메모리를 2GB로 제한해 최소 기준의 용량을 모사해 확인합니다. 절차는 `design/GPU_확인_안내.md`, 패키지는 `requirements/gpu_rtx.txt`, 확인 도구는 `tools/gpu_verify.py`입니다.

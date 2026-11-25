@@ -1,0 +1,19 @@
+# 최신 NVIDIA GPU 경로 패키지 목록(Ampere 이후, 예: RTX 3080 Ti, Compute Capability 8.6)
+# 설치: python -m pip install -r requirements/gpu_rtx.txt
+# 조건: NVIDIA 드라이버 580 이상(CUDA 13.x 빌드의 최소 조건, nvidia-smi로 확인)
+# 근거: PyTorch 2.15.0의 CUDA 빌드는 cu132(CUDA 13.2)로 배포됨. CPU 경로와 같은 라이브러리 조합.
+# 상태: 저자 확인용 경로. 교재 검증 환경에는 GPU가 없어 미검증이며, tools/gpu_verify.py로 확인한다.
+# 주의: 이 GPU는 GT 1030(2GB)보다 메모리와 속도가 크다. 학생 장비 기준 판정은 gpu_verify.py의 2GB 제한 모사로 한다.
+
+--extra-index-url https://download.pytorch.org/whl/cu132
+torch==2.15.0+cu132
+pytest==9.2.0
+matplotlib==3.11.2
+huggingface_hub==2.4.0
+safetensors==0.8.0
+transformers==5.24.0
+peft==0.22.0
+bitsandbytes==0.50.2
+datasets==5.2.0
+trl==1.18.2
+gguf==0.19.0

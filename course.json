@@ -762,7 +762,7 @@
       "title": "TRL SFTTrainer",
       "subtitle": "SFTConfig 대응표 → 자료형 설정 → 버전별 API 변화 → 기준 모델 평가",
       "slug": "ch47_sft_trainer",
-      "version": "v05",
+      "version": "v06",
       "source": "content/ch47.md",
       "tags": [
         "TRL",
@@ -796,7 +796,7 @@
       "title": "SFTTrainer + QLoRA 실전",
       "subtitle": "4비트 모델과 PEFT → 메모리 설정 → 실전 데이터 메모리 분석 → LoRA와 QLoRA 비교",
       "slug": "ch49_qlora_sft",
-      "version": "v02",
+      "version": "v03",
       "source": "content/ch49.md",
       "tags": [
         "QLoRA",
