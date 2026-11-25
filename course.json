@@ -874,6 +874,23 @@
         "Byte Order",
         "readmemh"
       ]
+    },
+    {
+      "id": "ch57",
+      "number": 57,
+      "title": "로컬 LLM API 서비스",
+      "subtitle": "HTTP와 REST API → Generate API와 Chat API → Streaming과 오류 처리 → 접근 제어",
+      "slug": "ch57_local_api",
+      "version": "v01",
+      "source": "content/ch57.md",
+      "tags": [
+        "REST API",
+        "Ollama API",
+        "Streaming",
+        "NDJSON",
+        "Timeout",
+        "접근 제어"
+      ]
     }
   ]
 }
