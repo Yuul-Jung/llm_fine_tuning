@@ -1,0 +1,13 @@
+{
+ "adapter": "models/fpga_lora_v1",
+ "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+ "base_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+ "adapter_sha256": "4d27152bc3eb382ca0d9fbf66ab139f9d37bc835e6751782b028a20cfadd68b8",
+ "source": "제50장 원본-15(train 38, 15단계, lr 2e-4, 모든 Linear r 8)",
+ "data": {
+  "dataset": "datasets/fpga_qa/fpga_qa.json",
+  "split": "split_v1.json"
+ },
+ "criteria_version": 2,
+ "final_test": "3/4 합격(핵심어 불합격), 배포 후보 불채택, 실습용"
+}
