@@ -1,0 +1,61 @@
+{
+ "steps": {
+  "2. 모델 다시 만들기": {
+   "상태": "실패",
+   "오류": "RuntimeError: ch51/save_load.py 실패: Traceback (most recent call last):\n  File \"/home/jung/llm_fine_tuning/examples/ch51/save_load.py\", line 130, in <module>\n    main()\n  File \"/home/jung/llm_fine_tuning/examples/ch51/save_load.py\", line 71, in main\n    size = (CKPT / name).stat().st_size\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 842, in stat\n    return os.stat(self, follow_symlinks=follow_symlinks)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '/home/jung/llm_fine_tuning/models/ch50/원본/checkpoint-15/adapter_model.safetensors'\n",
+   "자세히": "Traceback (most recent call last):\n  File \"/home/jung/llm_fine_tuning/tools/gpu_verify.py\", line 50, in run\n    out = fn() or {}\n          ^^^^\n  File \"/home/jung/llm_fine_tuning/tools/gpu_verify.py\", line 120, in rebuild\n    raise RuntimeError(f\"{script} 실패: {r.stderr[-800:]}\")\nRuntimeError: ch51/save_load.py 실패: Traceback (most recent call last):\n  File \"/home/jung/llm_fine_tuning/examples/ch51/save_load.py\", line 130, in <module>\n    main()\n  File \"/home/jung/llm_fine_tuning/examples/ch51/save_load.py\", line 71, in main\n    size = (CKPT / name).stat().st_size\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 842, in stat\n    return os.stat(self, follow_symlinks=follow_symlinks)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '/home/jung/llm_fine_tuning/models/ch50/원본/checkpoint-15/adapter_model.safetensors'\n\n",
+   "초": 586.7
+  },
+  "3. QLoRA 학습 메모리(2GB 제한 모사)": {
+   "상태": "성공",
+   "GPU 전체 MiB": 15984,
+   "제한 MiB": 2048,
+   "최대 할당 MiB": 1086,
+   "교재 계산값 MiB": 895.1,
+   "손실": [
+    2.3936,
+    3.3486,
+    3.4834,
+    2.95,
+    2.7733
+   ],
+   "NaN·Inf 없음": true,
+   "초": 14.3
+  },
+  "4. Q8_0 GGUF 품질과 속도(GPU)": {
+   "상태": "실패",
+   "오류": "OSError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/home/jung/llm_fine_tuning/models/fpga_merged_v1'. Use `repo_type` argument if needed.",
+   "자세히": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/jung/llm_fine_tuning/.venv/lib/python3.12/site-packages/transformers/configuration_utils.py\", line 886, in from_pretrained\n    config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/jung/llm_fine_tuning/.venv/lib/python3.12/site-packages/transformers/configuration_utils.py\", line 936, in get_config_dict\n    config_dict, kwargs = cls._get_config_dict(pretrained_model_name_or_path, **kwargs)\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/jung/llm_fine_tuning/.venv/lib/python3.12/site-packages/transformers/configuration_utils.py\", line 988, in _get_config_dict\n    resolved_config_file = cached_file(\n                           ^^^^^^^^^^^^\n  File \"/home/jung/llm_fine_tuning/.venv/lib/python3.12/site-packages/transformers/utils/hub.py\", line 370, in cached_file\n    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/jung/llm_fine_tuning/.venv/lib/python3.12/site-packages/transformers/utils/hub.py\", line 595, in cached_files\n    raise OSError(f\"{e}\") from e\nOSError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/home/jung/llm_fine_tuning/models/fpga_merged_v1'. Use `repo_type` argument if needed.\n",
+   "초": 0.0
+  },
+  "5. Ollama 등록과 응답 비교": {
+   "상태": "성공",
+   "결과": "Ollama 없음(건너뜀)",
+   "초": 0.0
+  },
+  "6. llama.cpp 속도": {
+   "상태": "성공",
+   "결과": "llama-bench 없음(건너뜀)",
+   "초": 0.0
+  }
+ },
+ "env": {
+  "운영체제": "Linux-7.0.0-43-generic-x86_64-with-glibc2.39",
+  "Python": "3.12.3",
+  "PyTorch": "2.15.0+cu132",
+  "CUDA 사용 가능": true,
+  "GPU": "NVIDIA GeForce RTX 3080 Ti Laptop GPU",
+  "Compute Capability": "8.6",
+  "VRAM MiB": 15984,
+  "CUDA(PyTorch 빌드)": "13.2",
+  "지원 세대": "sm_75 sm_80 sm_86 sm_90 sm_100 sm_120",
+  "드라이버": "595.99.02",
+  "transformers": "5.24.0",
+  "peft": "0.22.0",
+  "trl": "1.18.2",
+  "bitsandbytes": "0.50.2",
+  "gguf": "0.19.0",
+  "Ollama": "없음",
+  "llama-bench": "없음"
+ }
+}
