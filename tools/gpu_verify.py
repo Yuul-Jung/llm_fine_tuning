@@ -108,18 +108,35 @@ def environment():
         print(f"  {k}: {v}")
 
 
+def snapshot() -> dict:
+    return {p: p.read_bytes() for p in EX.rglob("*.json")}
+
+
 @step("2. 모델 다시 만들기")
 def rebuild():
-    done = []
+    """없는 모델만 다시 만든다. 실습이 교재 기록(examples/의 .json)을 GPU 결과로 바꾸면
+    그 파일은 reports/gpu_records/로 옮기고 교재 기록은 원래대로 되돌린다."""
+    done, moved = [], []
     for target, script in REBUILD:
         if target.exists():
             continue
         print(f"  실행: examples/{script}", flush=True)
+        before = snapshot()
         r = subprocess.run([sys.executable, str(EX / script)], cwd=ROOT, capture_output=True, text=True)
-        if r.returncode != 0:
-            raise RuntimeError(f"{script} 실패: {r.stderr[-800:]}")
+        for p, old in before.items():
+            if p.exists() and p.read_bytes() != old:
+                dest = REPORT / "gpu_records" / f"{p.parent.name}_{p.name}"
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(p.read_bytes())
+                p.write_bytes(old)
+                moved.append(str(dest.relative_to(ROOT)))
+        if r.returncode != 0 or not target.exists():
+            listing = sorted(str(x.relative_to(MODELS)) for x in target.parent.rglob("*"))[:40] \
+                if target.parent.exists() else "폴더 없음"
+            raise RuntimeError(f"{script} 뒤에 {target.relative_to(ROOT)} 없음(종료 코드 {r.returncode}). "
+                               f"폴더 내용: {listing}. 오류: {r.stderr[-800:]}")
         done.append(script)
-    return {"실행한 실습": done or "없음(모두 있음)"}
+    return {"실행한 실습": done or "없음(모두 있음)", "GPU 결과로 따로 둔 기록": moved or "없음"}
 
 
 @step("3. QLoRA 학습 메모리(2GB 제한 모사)")

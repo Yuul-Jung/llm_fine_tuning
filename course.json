@@ -796,7 +796,7 @@
       "title": "SFTTrainer + QLoRA 실전",
       "subtitle": "4비트 모델과 PEFT → 메모리 설정 → 실전 데이터 메모리 분석 → LoRA와 QLoRA 비교",
       "slug": "ch49_qlora_sft",
-      "version": "v03",
+      "version": "v04",
       "source": "content/ch49.md",
       "tags": [
         "QLoRA",
@@ -813,7 +813,7 @@
       "title": "평가·오답 분석·반복 개선",
       "subtitle": "기준값 비교 → 과적합 판정 → 하이퍼파라미터 조정 → 환각과 망각 → 오답 분석과 재학습 → 최종 Test",
       "slug": "ch50_improve",
-      "version": "v03",
+      "version": "v04",
       "source": "content/ch50.md",
       "tags": [
         "오답 분석",

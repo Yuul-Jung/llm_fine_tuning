@@ -19,6 +19,9 @@
 - 제54장 v02(양자화 경로), 제58장 v02(실제 GGUF 크기), 제60장 v02(상태표에 GGUF·Modelfile)
 - 제47장 v06, 제49장 v03: 평가·메모리 측정 입력을 모델의 장치로(GPU 경로 오류 수정)
 - 제53장 v02: 하드웨어 계산 참조를 제59장으로 정정(전체 장 연결 점검)
+- 제49장 v04: 저자 GPU(RTX 3080 Ti) 결과 반영(2GB 제한 실측 1,086MiB, CPU와 곡선·판정 일치)
+- 제50장 v04: 기록이 있어도 Adapter가 없으면 다시 학습(새 환경에서 모델 재생성 오류 수정)
+- tools/gpu_verify.py: 재생성 중 바뀐 교재 기록은 reports/gpu_records/로 옮기고 원래대로 되돌림
 - 저자 GPU 확인 도구 추가: `tools/gpu_verify.py`, `design/GPU_확인_안내.md`, `requirements/gpu_rtx.txt`(PyTorch 2.15.0 + CUDA 13.2)
 
 ## 2026-11-25 (제5부)
